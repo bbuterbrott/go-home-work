@@ -2,6 +2,7 @@ package main
 
 import (
 	"io/ioutil"
+	"log"
 	"os"
 	"strings"
 	"testing"
@@ -10,6 +11,12 @@ import (
 	"bou.ke/monkey"
 	"github.com/beevik/ntp"
 )
+
+type TimeError string
+
+func (e TimeError) Error() string {
+	return string(e)
+}
 
 // go test -gcflags=-l
 func TestHelloNow(t *testing.T) {
@@ -46,12 +53,6 @@ exact time: 1945-05-09 10:03:02 +0000 UTC
 	})
 }
 
-type TimeError string
-
-func (e TimeError) Error() string {
-	return string(e)
-}
-
 func TestHelloNowError(t *testing.T) {
 	t.Run("test error behavior", func(t *testing.T) {
 		layout := "2 Jan 2006 15:04:05"
@@ -71,6 +72,9 @@ func TestHelloNowError(t *testing.T) {
 			}
 			return ntpTime, TimeError("lookup ntp3.stratum2.ru on [::1]:53: read udp [::1]:55753->[::1]:53: read: connection refused")
 		})
+
+		// Если этого не делать то программа выйдет до того, как завершится тест. Наверное, exit code можно как-то более правильно проверить, но я только до такого решения додумался
+		monkey.Patch(log.Fatalf, func(string, ...interface{}) {})
 
 		result, err := catchStdout(main)
 		if err != nil {

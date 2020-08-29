@@ -9,7 +9,6 @@ import (
 )
 
 const (
-	// Если не указывать string (хоть он тут и не нужен), то не работает Monkey.Patch на ntp.Time() в тесте ¯\_(ツ)_/¯
 	ntpServer string = "ntp3.stratum2.ru"
 )
 
@@ -20,6 +19,6 @@ func main() {
 	if err == nil {
 		fmt.Printf("exact time: %v\n", ntpTime.Round(0))
 	} else {
-		log.Fatalf("Got error while getting time from ntp server %v: %v", "ntp3.stratum2.ru", err)
+		log.Fatalf("Got error while getting time from ntp server %v: %v", ntpServer, err)
 	}
 }
