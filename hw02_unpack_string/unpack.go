@@ -8,17 +8,18 @@ import (
 	"unicode/utf8"
 )
 
-// ErrInvalidString is returned when input string is in a wrong format
+// ErrInvalidString is returned when input string is in a wrong format.
 var ErrInvalidString = errors.New("invalid string")
 
-// Unpack unpacks string duplicating runes. Example: "a4bc2d5e" => "aaaabccddddde"
+// Unpack unpacks string duplicating runes. Example: "a4bc2d5e" => "aaaabccddddde".
 func Unpack(input string) (string, error) {
 	var result strings.Builder
 	lastLetter := ""
 	i := 0
 	inputRunes := []rune(input)
 	for _, rune := range input {
-		if unicode.IsLetter(rune) {
+		switch {
+		case unicode.IsLetter(rune):
 			lastLetter = string(rune)
 			if i+1 == utf8.RuneCountInString(input) {
 				result.WriteRune(rune)
@@ -31,7 +32,8 @@ func Unpack(input string) (string, error) {
 			if !unicode.IsDigit(nextSymbol) {
 				result.WriteRune(rune)
 			}
-		} else if unicode.IsDigit(rune) {
+
+		case unicode.IsDigit(rune):
 			if lastLetter == "" {
 				return "", ErrInvalidString
 			}
@@ -41,7 +43,8 @@ func Unpack(input string) (string, error) {
 				result.WriteString(s)
 			}
 			lastLetter = ""
-		} else {
+
+		default:
 			return "", ErrInvalidString
 		}
 		i++
