@@ -6,22 +6,22 @@ import (
 	"strings"
 )
 
+const (
+	topWordCount = 10
+)
+
+var re = regexp.MustCompile(`[\p{L}-]*`)
+
 // Top10 returns top 10 words from the input string.
 func Top10(s string) []string {
-	words := strings.Split(s, " ")
-	re := regexp.MustCompile(`[\p{L}-]*`)
-	reEmpty := regexp.MustCompile(`\s+`)
+	words := re.FindAllString(s, -1)
 	wordCount := make(map[string]int)
-	for _, w := range words {
-		filteredWords := re.FindAllString(w, -1)
-
-		for _, fw := range filteredWords {
-			filteredWord := strings.ToLower(fw)
-			if filteredWord == "" || filteredWord == "-" || reEmpty.MatchString(filteredWord) {
-				continue
-			}
-			wordCount[filteredWord]++
+	for _, fw := range words {
+		filteredWord := strings.ToLower(fw)
+		if filteredWord == "" || filteredWord == "-" {
+			continue
 		}
+		wordCount[filteredWord]++
 	}
 
 	type kv struct {
@@ -29,31 +29,22 @@ func Top10(s string) []string {
 		Value int
 	}
 
-	kvs := make([]kv, len(wordCount))
-	i := 0
+	kvs := make([]kv, 0, len(wordCount))
 	for k, v := range wordCount {
-		kvs[i] = kv{k, v}
-		i++
+		kvs = append(kvs, kv{k, v})
 	}
 
 	sort.Slice(kvs, func(i, j int) bool {
 		return kvs[i].Value > kvs[j].Value
 	})
 
-	var top10 []string
-	var top10kvs []kv
-	if len(kvs) > 10 {
-		top10 = make([]string, 10)
-		top10kvs = make([]kv, 10)
-		copy(top10kvs, kvs[:10])
-	} else {
-		top10 = make([]string, len(kvs))
-		top10kvs = kvs
+	cutTop := make([]string, 0, topWordCount)
+	for i, kv := range kvs {
+		cutTop = append(cutTop, kv.Key)
+		if i >= topWordCount {
+			break
+		}
 	}
 
-	for i, kv := range top10kvs {
-		top10[i] = kv.Key
-	}
-
-	return top10
+	return cutTop
 }
