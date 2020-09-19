@@ -7,9 +7,9 @@ import (
 )
 
 // Change to true if needed
-var taskWithAsteriskIsCompleted = false
+var taskWithAsteriskIsCompleted = true
 
-var text = `Как видите, он  спускается  по  лестнице  вслед  за  своим
+var russianText = `Как видите, он  спускается  по  лестнице  вслед  за  своим
 	другом   Кристофером   Робином,   головой   вниз,  пересчитывая
 	ступеньки собственным затылком:  бум-бум-бум.  Другого  способа
 	сходить  с  лестницы  он  пока  не  знает.  Иногда ему, правда,
@@ -43,18 +43,39 @@ var text = `Как видите, он  спускается  по  лестни�
 	посидеть у огня и послушать какую-нибудь интересную сказку.
 		В этот вечер...`
 
-func TestTop10(t *testing.T) {
+// English text with less than 10 words
+var englishText = `sad sad world out there`
+
+func TestTop10EmptyString(t *testing.T) {
 	t.Run("no words in empty string", func(t *testing.T) {
 		require.Len(t, Top10(""), 0)
 	})
+}
 
-	t.Run("positive test", func(t *testing.T) {
-		if taskWithAsteriskIsCompleted {
-			expected := []string{"он", "а", "и", "что", "ты", "не", "если", "то", "его", "кристофер", "робин", "в"}
-			require.Subset(t, expected, Top10(text))
-		} else {
-			expected := []string{"он", "и", "а", "что", "ты", "не", "если", "-", "то", "Кристофер"}
-			require.ElementsMatch(t, expected, Top10(text))
-		}
+func TestTop10SpecialCharactersString(t *testing.T) {
+	t.Run("no words in special character string", func(t *testing.T) {
+		require.Len(t, Top10("./?"), 0)
+	})
+}
+
+func TestTop10SpecialString(t *testing.T) {
+	t.Run("no words in special string", func(t *testing.T) {
+		require.Len(t, Top10("-"), 0)
+	})
+}
+
+func TestTop10RussianText(t *testing.T) {
+	t.Run("positive russian text test", func(t *testing.T) {
+		expected := []string{"он", "а", "и", "что", "ты", "не", "если", "то", "его", "кристофер", "робин", "в"}
+		actual := Top10(russianText)
+		require.Subset(t, expected, actual, "actual=%v", actual)
+	})
+}
+
+func TestTop10EnglishText(t *testing.T) {
+	t.Run("positive russian text test", func(t *testing.T) {
+		expected := []string{"sad", "world", "out", "there"}
+		actual := Top10(englishText)
+		require.Subset(t, expected, actual, "actual=%v", actual)
 	})
 }
