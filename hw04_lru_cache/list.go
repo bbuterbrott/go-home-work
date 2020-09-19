@@ -1,30 +1,31 @@
 package hw04_lru_cache //nolint:golint,stylecheck
 
+// List is an interface for double linked lists.
 type List interface {
-	// Длина списка
+	// Returns length of the list
 	Len() int
-	// Первый элемент списка
+	// Returns first list element
 	Front() *listItem
-	// Последний элемент списка
+	// Returns last list element
 	Back() *listItem
-	// Добавить значение в начало
+	// Adds new first element
 	PushFront(v interface{}) *listItem
-	// Добавить значение в конец
+	// Adds new last element
 	PushBack(v interface{}) *listItem
-	// Удалить элемент
+	// Deletes element from the list
 	Remove(i *listItem)
-	// Переместить элемент в начало
+	// Moves element to the front of the list
 	MoveToFront(i *listItem)
-	// Очистить список
+	// Clears the list
 	Clear()
 }
 
 type listItem struct {
-	// Значение
+	// Value
 	Value interface{}
-	// Следующий элемент
+	// Next element
 	Next *listItem
-	// Предыдущий элемент
+	// Previous element
 	Prev *listItem
 }
 

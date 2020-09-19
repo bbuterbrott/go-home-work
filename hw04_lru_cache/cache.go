@@ -2,12 +2,13 @@ package hw04_lru_cache //nolint:golint,stylecheck
 
 type Key string
 
+// Cache is interface for cache implementations which use string as a key.
 type Cache interface {
-	// Добавить значение в кэш по ключу
+	// Adds cache value by key. Returns if key was already present in cache
 	Set(key string, value interface{}) bool
-	// Получить значение из кэша по ключу
+	// Gets cache value by key. Also returns if key was in cache
 	Get(key string) (interface{}, bool)
-	// Очистить кэш
+	// Clears cache
 	Clear()
 }
 
