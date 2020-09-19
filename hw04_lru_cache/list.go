@@ -1,28 +1,30 @@
 package hw04_lru_cache //nolint:golint,stylecheck
 
 type List interface {
-	// длина списка
+	// Длина списка
 	Len() int
-	// первый элемент списка
+	// Первый элемент списка
 	Front() *listItem
-	// последний элемент списка
+	// Последний элемент списка
 	Back() *listItem
-	// добавить значение в начало
+	// Добавить значение в начало
 	PushFront(v interface{}) *listItem
-	// добавить значение в конец
+	// Добавить значение в конец
 	PushBack(v interface{}) *listItem
-	// удалить элемент
+	// Удалить элемент
 	Remove(i *listItem)
-	// переместить элемент в начало
+	// Переместить элемент в начало
 	MoveToFront(i *listItem)
+	// Очистить список
+	Clear()
 }
 
 type listItem struct {
-	// значение
+	// Значение
 	Value interface{}
-	// следующий элемент
+	// Следующий элемент
 	Next *listItem
-	// предыдущий элемент
+	// Предыдущий элемент
 	Prev *listItem
 }
 
@@ -92,6 +94,12 @@ func (l *list) MoveToFront(i *listItem) {
 	}
 	l.Remove(i)
 	l.PushFront(i.Value)
+}
+
+func (l *list) Clear() {
+	l.front = nil
+	l.back = nil
+	l.len = 0
 }
 
 func NewList() List {
