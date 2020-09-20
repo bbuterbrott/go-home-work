@@ -28,6 +28,7 @@ func (c lruCache) Set(key string, value interface{}) bool {
 	if li != nil {
 		li.Value = cacheItem{key, value}
 		c.queue.MoveToFront(li)
+
 		return true
 	}
 

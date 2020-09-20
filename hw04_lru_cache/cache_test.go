@@ -49,6 +49,23 @@ func TestCache(t *testing.T) {
 		require.Nil(t, val)
 	})
 
+	t.Run("clear", func(t *testing.T) {
+		c := NewCache(3)
+
+		c.Set("a", 1)
+		c.Set("b", 2)
+
+		c.Clear()
+
+		val, wasInCache := c.Get("a")
+		require.False(t, wasInCache)
+		require.Nil(t, val)
+
+		val, wasInCache = c.Get("b")
+		require.False(t, wasInCache)
+		require.Nil(t, val)
+	})
+
 	t.Run("capacity logic", func(t *testing.T) {
 		c := NewCache(3)
 
