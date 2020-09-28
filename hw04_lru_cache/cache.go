@@ -21,7 +21,7 @@ type cacheItem struct {
 	Value interface{}
 }
 
-func (c lruCache) Set(key string, value interface{}) bool {
+func (c *lruCache) Set(key string, value interface{}) bool {
 	li := c.cache[key]
 	if li != nil {
 		li.Value = cacheItem{key, value}
@@ -41,7 +41,7 @@ func (c lruCache) Set(key string, value interface{}) bool {
 	return false
 }
 
-func (c lruCache) Get(key string) (interface{}, bool) {
+func (c *lruCache) Get(key string) (interface{}, bool) {
 	li := c.cache[key]
 	if li == nil {
 		return nil, false
@@ -52,7 +52,7 @@ func (c lruCache) Get(key string) (interface{}, bool) {
 	return ci.Value, true
 }
 
-func (c lruCache) Clear() {
+func (c *lruCache) Clear() {
 	c.queue.Clear()
 	c.cache = make(map[string]*listItem)
 }
