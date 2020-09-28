@@ -1,4 +1,4 @@
-module github.com/fixme_my_friend/hw03_frequency_analysis
+module github.com/bbuterbrott/go-home-work/hw03_frequency_analysis
 
 go 1.14
 
