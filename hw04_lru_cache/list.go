@@ -51,11 +51,11 @@ func (l *list) Back() *listItem {
 
 func (l *list) PushFront(v interface{}) *listItem {
 	if l.front == nil {
-		l.front = &listItem{Value: v, Next: nil, Prev: nil}
+		l.front = &listItem{Value: v, Next: nil, Prev: nil, List: l}
 		l.back = l.front
 	} else {
 		oldFront := l.front
-		l.front = &listItem{Value: v, Next: oldFront, Prev: nil}
+		l.front = &listItem{Value: v, Next: oldFront, Prev: nil, List: l}
 		oldFront.Prev = l.front
 	}
 	l.len++
@@ -64,11 +64,11 @@ func (l *list) PushFront(v interface{}) *listItem {
 
 func (l *list) PushBack(v interface{}) *listItem {
 	if l.back == nil {
-		l.back = &listItem{Value: v, Next: nil, Prev: nil}
+		l.back = &listItem{Value: v, Next: nil, Prev: nil, List: l}
 		l.front = l.back
 	} else {
 		oldBack := l.back
-		l.back = &listItem{Value: v, Next: nil, Prev: oldBack}
+		l.back = &listItem{Value: v, Next: nil, Prev: oldBack, List: l}
 		oldBack.Next = l.back
 	}
 	l.len++
