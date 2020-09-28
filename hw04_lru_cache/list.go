@@ -27,6 +27,8 @@ type listItem struct {
 	Next *listItem
 	// Previous element
 	Prev *listItem
+	// List
+	List *list
 }
 
 type list struct {
@@ -74,6 +76,9 @@ func (l *list) PushBack(v interface{}) *listItem {
 }
 
 func (l *list) Remove(i *listItem) {
+	if i.List != l {
+		return
+	}
 	if l.front == i {
 		l.front = i.Next
 	}
@@ -90,6 +95,9 @@ func (l *list) Remove(i *listItem) {
 }
 
 func (l *list) MoveToFront(i *listItem) {
+	if i.List != l {
+		return
+	}
 	if l.front == i {
 		return
 	}

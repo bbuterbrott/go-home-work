@@ -1,7 +1,5 @@
 package hw04_lru_cache //nolint:golint,stylecheck
 
-type Key string
-
 // Cache is interface for cache implementations which use string as a key.
 type Cache interface {
 	// Adds cache value by key. Returns if key was already present in cache
@@ -56,9 +54,7 @@ func (c lruCache) Get(key string) (interface{}, bool) {
 
 func (c lruCache) Clear() {
 	c.queue.Clear()
-	for k := range c.cache {
-		delete(c.cache, k)
-	}
+	c.cache = make(map[string]*listItem)
 }
 
 func NewCache(capacity int) Cache {
