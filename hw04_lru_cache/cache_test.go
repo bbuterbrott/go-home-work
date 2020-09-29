@@ -49,8 +49,66 @@ func TestCache(t *testing.T) {
 		require.Nil(t, val)
 	})
 
+	t.Run("clear", func(t *testing.T) {
+		c := NewCache(3)
+
+		c.Set("a", 1)
+		c.Set("b", 2)
+
+		c.Clear()
+
+		val, wasInCache := c.Get("a")
+		require.False(t, wasInCache)
+		require.Nil(t, val)
+
+		val, wasInCache = c.Get("b")
+		require.False(t, wasInCache)
+		require.Nil(t, val)
+	})
+
+	t.Run("capacity logic", func(t *testing.T) {
+		c := NewCache(3)
+
+		c.Set("a", 1)
+		c.Set("b", 2)
+		c.Set("c", 3)
+
+		wasInCache := c.Set("d", 4)
+		require.False(t, wasInCache)
+	})
+
 	t.Run("purge logic", func(t *testing.T) {
-		// Write me
+		c := NewCache(3)
+
+		wasInCache := c.Set("a", 1)
+		require.False(t, wasInCache)
+
+		wasInCache = c.Set("b", 2)
+		require.False(t, wasInCache)
+
+		wasInCache = c.Set("c", 3)
+		require.False(t, wasInCache)
+
+		var val interface{}
+
+		val, wasInCache = c.Get("c")
+		require.True(t, wasInCache)
+		require.Equal(t, 3, val)
+
+		val, wasInCache = c.Get("c")
+		require.True(t, wasInCache)
+		require.Equal(t, 3, val)
+
+		val, wasInCache = c.Get("b")
+		require.True(t, wasInCache)
+		require.Equal(t, 2, val)
+
+		wasInCache = c.Set("d", 4)
+		require.False(t, wasInCache)
+
+		val, wasInCache = c.Get("a")
+		require.Nil(t, val)
+		require.False(t, wasInCache)
 	})
 }
 
@@ -64,14 +122,14 @@ func TestCacheMultithreading(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		for i := 0; i < 1_000_000; i++ {
-			c.Set(Key(strconv.Itoa(i)), i)
+			c.Set(strconv.Itoa(i), i)
 		}
 	}()
 
 	go func() {
 		defer wg.Done()
 		for i := 0; i < 1_000_000; i++ {
-			c.Get(Key(strconv.Itoa(rand.Intn(1_000_000))))
+			c.Get(strconv.Itoa(rand.Intn(1_000_000)))
 		}
 	}()
 
