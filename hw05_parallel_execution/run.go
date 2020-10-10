@@ -4,24 +4,29 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 )
 
 var ErrErrorsLimitExceeded = errors.New("errors limit exceeded")
 
 type Task func() error
 
-var mu = sync.Mutex{}
-
-// Run starts tasks in N goroutines and stops its work when it has received M errors from tasks.
+// Run starts tasks in N goroutines and stops its work when it has received M errors from tasks. If M <= 0 that means that errors will be ignored.
 func Run(tasks []Task, n int, m int) error {
 	fmt.Printf("Task size: %v, n=%v, m=%v\n", len(tasks), n, m)
+
+	if n <= 0 {
+		return fmt.Errorf("n should be a positive number")
+	}
+	ignoreErrors := m <= 0
+
 	queueCh := make(chan Task)
-	var errCountValue int
+	var errCountValue int32
 	errCount := &errCountValue
 	go func() {
 		for _, task := range tasks {
 			fmt.Printf("Current error count: %v\n", *errCount)
-			if *errCount >= m {
+			if int(*errCount) >= m && !ignoreErrors {
 				fmt.Printf("Got %v errors. Sending done signal\n", *errCount)
 				break
 			}
@@ -50,9 +55,7 @@ func Run(tasks []Task, n int, m int) error {
 				err := task()
 
 				if err != nil {
-					mu.Lock()
-					*errCount++
-					mu.Unlock()
+					atomic.AddInt32(errCount, 1)
 					fmt.Printf("Consumer %v finished job with error. Total error count: %v\n", i, *errCount)
 				} else {
 					fmt.Printf("Consumer %v finished job without errors\n", i)
@@ -65,7 +68,7 @@ func Run(tasks []Task, n int, m int) error {
 
 	fmt.Println("Finished processing all tasks")
 
-	if *errCount >= m {
+	if int(*errCount) >= m && !ignoreErrors {
 		return ErrErrorsLimitExceeded
 	}
 
