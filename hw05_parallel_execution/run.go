@@ -25,17 +25,16 @@ func Run(tasks []Task, n int, m int) error {
 	errCount := &errCountValue
 	go func() {
 		for _, task := range tasks {
-			fmt.Printf("Current error count: %v\n", *errCount)
-			if int(*errCount) >= m && !ignoreErrors {
-				fmt.Printf("Got %v errors. Sending done signal\n", *errCount)
+			errCountValue := atomic.LoadInt32(errCount)
+			fmt.Printf("Current error count: %v\n", errCountValue)
+			if int(errCountValue) >= m && !ignoreErrors {
+				fmt.Printf("Got %v errors. Sending done signal\n", errCountValue)
 				break
 			}
 			queueCh <- task
 		}
 		close(queueCh)
 	}()
-
-	fmt.Println("Started processing tasks")
 
 	wg := sync.WaitGroup{}
 	wg.Add(n)
@@ -56,7 +55,7 @@ func Run(tasks []Task, n int, m int) error {
 
 				if err != nil {
 					atomic.AddInt32(errCount, 1)
-					fmt.Printf("Consumer %v finished job with error. Total error count: %v\n", i, *errCount)
+					fmt.Printf("Consumer %v finished job with error. Total error count: %v\n", i, atomic.LoadInt32(errCount))
 				} else {
 					fmt.Printf("Consumer %v finished job without errors\n", i)
 				}
