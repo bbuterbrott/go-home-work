@@ -39,9 +39,9 @@ func TestRun(t *testing.T) {
 
 	t.Run("if N < 0 then error should be returned", func(t *testing.T) {
 		tasks := make([]Task, 0, 1)
-		result := Run(tasks, 0, -1)
+		result := Run(tasks, -1, -1)
 
-		require.Equal(t, fmt.Errorf("n should be a positive number"), result)
+		require.Equal(t, fmt.Errorf("number of tasks should be a positive number, n=-1"), result)
 	})
 
 	t.Run("if there were errors in first M tasks and M < 0 then errors should be ignored", func(t *testing.T) {

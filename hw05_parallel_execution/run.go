@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"sync"
-	"sync/atomic"
 )
 
 var ErrErrorsLimitExceeded = errors.New("errors limit exceeded")
@@ -16,27 +15,31 @@ func Run(tasks []Task, n int, m int) error {
 	fmt.Printf("Task size: %v, n=%v, m=%v\n", len(tasks), n, m)
 
 	if n <= 0 {
-		return fmt.Errorf("n should be a positive number")
+		return fmt.Errorf("number of tasks should be a positive number, n=%v", n)
 	}
-	ignoreErrors := m <= 0
 
 	queueCh := make(chan Task)
-	var errCountValue int32
-	errCount := &errCountValue
-	go func() {
-		for _, task := range tasks {
-			errCountValue := atomic.LoadInt32(errCount)
-			fmt.Printf("Current error count: %v\n", errCountValue)
-			if int(errCountValue) >= m && !ignoreErrors {
-				fmt.Printf("Got %v errors. Sending done signal\n", errCountValue)
-				break
-			}
-			queueCh <- task
-		}
-		close(queueCh)
-	}()
-
+	errorCh := make(chan struct{})
+	consumerStopCh := make(chan struct{})
 	wg := sync.WaitGroup{}
+	startConsumers(n, &wg, queueCh, errorCh, consumerStopCh)
+
+	var errorExit bool
+	queueAdderStopCh := make(chan struct{})
+	go startErrorCounter(m, errorCh, queueAdderStopCh, consumerStopCh, &errorExit)
+	go startQueueAdder(tasks, queueCh, queueAdderStopCh)
+
+	waitForCompletion(&wg, errorCh)
+	fmt.Println("Finished processing all tasks")
+
+	if errorExit {
+		return ErrErrorsLimitExceeded
+	}
+
+	return nil
+}
+
+func startConsumers(n int, wg *sync.WaitGroup, queueCh <-chan Task, errorCh chan<- struct{}, stopCh <-chan struct{}) {
 	wg.Add(n)
 	for i := 0; i < n; i++ {
 		go func(i int) {
@@ -54,22 +57,76 @@ func Run(tasks []Task, n int, m int) error {
 				err := task()
 
 				if err != nil {
-					atomic.AddInt32(errCount, 1)
-					fmt.Printf("Consumer %v finished job with error. Total error count: %v\n", i, atomic.LoadInt32(errCount))
+					select {
+					case <-stopCh:
+						fmt.Printf("Consumer %v stopped by receiving stop signal\n", i)
+						break
+					default:
+					}
+
+					select {
+					case <-stopCh:
+						fmt.Printf("Consumer %v stopped by receiving stop signal\n", i)
+						break
+					case errorCh <- struct{}{}:
+						fmt.Printf("Consumer %v finished job with error\n", i)
+					}
 				} else {
 					fmt.Printf("Consumer %v finished job without errors\n", i)
 				}
 			}
 		}(i)
 	}
+}
 
-	wg.Wait()
-
-	fmt.Println("Finished processing all tasks")
-
-	if int(*errCount) >= m && !ignoreErrors {
-		return ErrErrorsLimitExceeded
+func startErrorCounter(m int, errorCh <-chan struct{}, queueAdderStopCh chan<- struct{}, consumerStopCh chan<- struct{}, errorExit *bool) {
+	var errCount int
+	for {
+		_, ok := <-errorCh
+		if !ok {
+			break
+		}
+		errCount++
+		fmt.Printf("Current error count: %v\n", errCount)
+		if m > 0 && errCount >= m {
+			fmt.Printf("Got %v errors. Stopping\n", errCount)
+			*errorExit = true
+			defer close(queueAdderStopCh)
+			defer close(consumerStopCh)
+			break
+		}
 	}
+}
 
-	return nil
+func startQueueAdder(tasks []Task, queueCh chan<- Task, stopCh <-chan struct{}) {
+	for _, task := range tasks {
+		select {
+		case <-stopCh:
+			fmt.Println("Stopped adding new tasks to queue")
+			break
+		default:
+		}
+
+		select {
+		case <-stopCh:
+			fmt.Println("Stopped adding new tasks to queue")
+			break
+		case queueCh <- task:
+			fmt.Println("Added task")
+		}
+	}
+	defer close(queueCh)
+}
+
+func waitForCompletion(wg *sync.WaitGroup, errorCh chan struct{}) {
+	wg.Wait()
+	go func() {
+		for {
+			_, ok := <-errorCh
+			if !ok {
+				break
+			}
+		}
+	}()
+	defer close(errorCh)
 }
