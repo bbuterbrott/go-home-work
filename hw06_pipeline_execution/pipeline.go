@@ -1,8 +1,6 @@
 package hw06_pipeline_execution //nolint:golint,stylecheck
 
-import (
-	"log"
-)
+import "log"
 
 type (
 	In  = <-chan interface{}
@@ -34,16 +32,21 @@ func withDone(in In, done In) In {
 	newIn := make(chan interface{})
 	go func() {
 		defer close(newIn)
-	f:
 		for {
 			select {
+			case <-done:
+				return
+			default:
+			}
+
+			select {
+			case <-done:
+				return
 			case data, ok := <-in:
 				if !ok {
-					break f
+					return
 				}
 				newIn <- data
-			case <-done:
-				break f
 			}
 		}
 	}()
