@@ -19,18 +19,22 @@ func Run(tasks []Task, n int, m int) error {
 	}
 
 	queueCh := make(chan Task)
-	errorCh := make(chan struct{})
-	consumerStopCh := make(chan struct{})
-	wg := sync.WaitGroup{}
-	startConsumers(n, &wg, queueCh, errorCh, consumerStopCh)
+	resultCh := make(chan error, n)
+	wg := &sync.WaitGroup{}
 
-	var errorExit bool
-	queueAdderStopCh := make(chan struct{})
-	go startErrorCounter(m, errorCh, queueAdderStopCh, consumerStopCh, &errorExit)
-	go startQueueAdder(tasks, queueCh, queueAdderStopCh)
+	wg.Add(n)
+	for i := 0; i < n; i++ {
+		go startConsumer(i, wg, queueCh, resultCh)
+	}
 
-	waitForCompletion(&wg, errorCh)
-	fmt.Println("Finished processing all tasks")
+	errorExit := startQueueAdder(m, tasks, queueCh, resultCh)
+
+	go func() {
+		for range resultCh {
+		}
+	}()
+
+	waitForCompletion(wg, resultCh)
 
 	if errorExit {
 		return ErrErrorsLimitExceeded
@@ -39,94 +43,50 @@ func Run(tasks []Task, n int, m int) error {
 	return nil
 }
 
-func startConsumers(n int, wg *sync.WaitGroup, queueCh <-chan Task, errorCh chan<- struct{}, stopCh <-chan struct{}) {
-	wg.Add(n)
-	for i := 0; i < n; i++ {
-		go func(i int) {
-			fmt.Printf("Consumer %v started\n", i)
-			defer wg.Done()
+func startConsumer(i int, wg *sync.WaitGroup, queueCh <-chan Task, resultCh chan<- error) {
+	fmt.Printf("Consumer %v started\n", i)
+	defer wg.Done()
 
-			for {
-				task, ok := <-queueCh
-
-				if !ok {
-					fmt.Printf("Consumer %v finished working\n", i)
-					break
-				}
-
-				err := task()
-
-				if err != nil {
-					select {
-					case <-stopCh:
-						fmt.Printf("Consumer %v stopped by receiving stop signal\n", i)
-						break
-					default:
-					}
-
-					select {
-					case <-stopCh:
-						fmt.Printf("Consumer %v stopped by receiving stop signal\n", i)
-						break
-					case errorCh <- struct{}{}:
-						fmt.Printf("Consumer %v finished job with error\n", i)
-					}
-				} else {
-					fmt.Printf("Consumer %v finished job without errors\n", i)
-				}
-			}
-		}(i)
+	for task := range queueCh {
+		resultCh <- task()
 	}
 }
 
-func startErrorCounter(m int, errorCh <-chan struct{}, queueAdderStopCh chan<- struct{}, consumerStopCh chan<- struct{}, errorExit *bool) {
+func startQueueAdder(m int, tasks []Task, queueCh chan<- Task, resultCh <-chan error) bool {
 	var errCount int
-	for {
-		_, ok := <-errorCh
-		if !ok {
-			break
-		}
-		errCount++
-		fmt.Printf("Current error count: %v\n", errCount)
-		if m > 0 && errCount >= m {
-			fmt.Printf("Got %v errors. Stopping\n", errCount)
-			*errorExit = true
-			defer close(queueAdderStopCh)
-			defer close(consumerStopCh)
-			break
-		}
-	}
-}
-
-func startQueueAdder(tasks []Task, queueCh chan<- Task, stopCh <-chan struct{}) {
-	for _, task := range tasks {
-		select {
-		case <-stopCh:
-			fmt.Println("Stopped adding new tasks to queue")
-			break
-		default:
-		}
-
-		select {
-		case <-stopCh:
-			fmt.Println("Stopped adding new tasks to queue")
-			break
-		case queueCh <- task:
-			fmt.Println("Added task")
-		}
-	}
 	defer close(queueCh)
-}
 
-func waitForCompletion(wg *sync.WaitGroup, errorCh chan struct{}) {
-	wg.Wait()
-	go func() {
+	for _, task := range tasks {
 		for {
-			_, ok := <-errorCh
-			if !ok {
+			if len(resultCh) == 0 {
 				break
 			}
+
+			err := <-resultCh
+
+			if m > 0 && err != nil {
+				errCount++
+				fmt.Printf("Current error count: %v\n", errCount)
+				if errCount == m {
+					fmt.Printf("Got %v errors. Stopping\n", errCount)
+					return true
+				}
+			}
+		}
+
+		queueCh <- task
+		fmt.Println("Added new task to queue")
+	}
+
+	return false
+}
+
+func waitForCompletion(wg *sync.WaitGroup, resultCh chan error) {
+	go func() {
+		for range resultCh {
 		}
 	}()
-	defer close(errorCh)
+
+	wg.Wait()
+	defer close(resultCh)
 }
