@@ -20,21 +20,18 @@ func Run(tasks []Task, n int, m int) error {
 
 	queueCh := make(chan Task)
 	resultCh := make(chan error, n)
+	doneCh := make(chan struct{})
 	wg := &sync.WaitGroup{}
 
 	wg.Add(n)
 	for i := 0; i < n; i++ {
-		go startConsumer(i, wg, queueCh, resultCh)
+		go startConsumer(i, wg, queueCh, resultCh, doneCh)
 	}
 
-	errorExit := startQueueAdder(m, tasks, queueCh, resultCh)
+	errorExit := startQueueAdder(m, tasks, queueCh, resultCh, doneCh)
 
-	go func() {
-		for range resultCh {
-		}
-	}()
-
-	waitForCompletion(wg, resultCh)
+	wg.Wait()
+	defer close(resultCh)
 
 	if errorExit {
 		return ErrErrorsLimitExceeded
@@ -43,18 +40,23 @@ func Run(tasks []Task, n int, m int) error {
 	return nil
 }
 
-func startConsumer(i int, wg *sync.WaitGroup, queueCh <-chan Task, resultCh chan<- error) {
+func startConsumer(i int, wg *sync.WaitGroup, queueCh <-chan Task, resultCh chan<- error, doneCh <-chan struct{}) {
 	fmt.Printf("Consumer %v started\n", i)
 	defer wg.Done()
 
 	for task := range queueCh {
-		resultCh <- task()
+		select {
+		case resultCh <- task():
+		case <-doneCh:
+			break
+		}
 	}
 }
 
-func startQueueAdder(m int, tasks []Task, queueCh chan<- Task, resultCh <-chan error) bool {
+func startQueueAdder(m int, tasks []Task, queueCh chan<- Task, resultCh <-chan error, doneCh chan<- struct{}) bool {
 	var errCount int
 	defer close(queueCh)
+	defer close(doneCh)
 
 	for _, task := range tasks {
 		for {
@@ -67,7 +69,7 @@ func startQueueAdder(m int, tasks []Task, queueCh chan<- Task, resultCh <-chan e
 			if m > 0 && err != nil {
 				errCount++
 				fmt.Printf("Current error count: %v\n", errCount)
-				if errCount == m {
+				if errCount >= m {
 					fmt.Printf("Got %v errors. Stopping\n", errCount)
 					return true
 				}
@@ -79,14 +81,4 @@ func startQueueAdder(m int, tasks []Task, queueCh chan<- Task, resultCh <-chan e
 	}
 
 	return false
-}
-
-func waitForCompletion(wg *sync.WaitGroup, resultCh chan error) {
-	go func() {
-		for range resultCh {
-		}
-	}()
-
-	wg.Wait()
-	defer close(resultCh)
 }
