@@ -1,5 +1,9 @@
 package hw06_pipeline_execution //nolint:golint,stylecheck
 
+import (
+	"log"
+)
+
 type (
 	In  = <-chan interface{}
 	Out = In
@@ -9,11 +13,21 @@ type (
 type Stage func(in In) (out Out)
 
 func ExecutePipeline(in In, done In, stages ...Stage) Out {
-	stageIn := in
-	for _, stage := range stages {
-		stageIn = stage(withDone(stageIn, done))
+	if in == nil {
+		log.Print("in channel must not be nil")
+		return nil
 	}
-	return stageIn
+
+	if len(stages) == 0 {
+		log.Print("you must specify at least one stage")
+		return nil
+	}
+
+	stageCh := in
+	for _, stage := range stages {
+		stageCh = stage(withDone(stageCh, done))
+	}
+	return stageCh
 }
 
 func withDone(in In, done In) In {

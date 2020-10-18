@@ -36,6 +36,15 @@ func TestPipeline(t *testing.T) {
 		g("Stringifier", func(v interface{}) interface{} { return strconv.Itoa(v.(int)) }),
 	}
 
+	t.Run("incorrect params", func(t *testing.T) {
+		result := ExecutePipeline(nil, nil, stages...)
+		require.Nil(t, result)
+
+		in := make(Bi)
+		result = ExecutePipeline(in, nil)
+		require.Nil(t, result)
+	})
+
 	t.Run("simple case", func(t *testing.T) {
 		in := make(Bi)
 		data := []int{1, 2, 3, 4, 5}
