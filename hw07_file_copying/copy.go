@@ -32,8 +32,6 @@ func Copy(fromPath string, toPath string, offset, limit int64) error {
 		return ErrOffsetExceedsFileSize
 	}
 
-	progressBar := pb.StartNew(int(limit))
-	progressBar.Set(pb.Bytes, true)
 	fromFile, err := os.Open(fromPath)
 	if err != nil {
 		return fmt.Errorf("couldn't open from file '%v'", fromPath)
@@ -47,6 +45,8 @@ func Copy(fromPath string, toPath string, offset, limit int64) error {
 		return fmt.Errorf("couldn't seek from file '%v'", fromPath)
 	}
 
+	progressBar := pb.Start64(limit)
+	progressBar.Set(pb.Bytes, true)
 	remaining := limit
 	if limit == 0 {
 		remaining = fromFileSize
@@ -57,7 +57,7 @@ func Copy(fromPath string, toPath string, offset, limit int64) error {
 			currentLimit = remaining
 		}
 		written, err := io.CopyN(toFile, fromFile, currentLimit)
-		progressBar.Add(int(written))
+		progressBar.Add64(written)
 		if err != nil {
 			if errors.Is(err, io.EOF) {
 				fmt.Println("Completed copying of file")
