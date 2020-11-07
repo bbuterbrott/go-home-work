@@ -8,7 +8,7 @@ import (
 
 // RunCmd runs a command + arguments (cmd) with environment variables from env.
 func RunCmd(cmd []string, env Environment) (returnCode int) {
-	command := exec.Command(cmd[0], cmd[1:]...)
+	command := exec.Command(cmd[0], cmd[1:]...) //nolint:gosec. Да, это небезопасно, но в данном случае это необходимо
 
 	for name, value := range env {
 		if value == "" {
@@ -25,7 +25,7 @@ func RunCmd(cmd []string, env Environment) (returnCode int) {
 
 	err := command.Run()
 	if err != nil {
-		if exitError, ok := err.(*exec.ExitError); ok {
+		if exitError, ok := err.(*exec.ExitError); ok { //nolint:errorlint. Мы знаем, что ошибка будет без вложенностей
 			fmt.Printf("Got error while running command: %v\n", err)
 			return exitError.ExitCode()
 		}
