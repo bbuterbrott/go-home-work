@@ -54,15 +54,19 @@ func ReadDir(dir string) (Environment, error) {
 				return nil, err
 			}
 
-			if r == '\n' || r == 0 {
+			if r == '\n' {
 				break
+			}
+
+			if r == 0 {
+				r = '\n'
 			}
 
 			runes = append(runes, r)
 		}
 
 		firstLine := string(runes)
-		env[fileName] = strings.TrimSpace(firstLine)
+		env[fileName] = strings.TrimRight(firstLine, "\t \n")
 	}
 
 	return env, nil

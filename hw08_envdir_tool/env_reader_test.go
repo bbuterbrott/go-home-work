@@ -14,7 +14,7 @@ func TestReadDir(t *testing.T) {
 
 		expectedEnv := Environment(make(map[string]string, 0))
 		expectedEnv["BAR"] = "bar"
-		expectedEnv["FOO"] = "foo"
+		expectedEnv["FOO"] = "   foo\nwith new line"
 		expectedEnv["HELLO"] = "\"hello\""
 		expectedEnv["UNSET"] = ""
 		require.Equal(t, expectedEnv, env, "Environments doesn't match")
