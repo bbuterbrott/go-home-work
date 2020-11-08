@@ -13,9 +13,9 @@ func RunCmd(cmd []string, env Environment) (returnCode int) {
 	for name, value := range env {
 		if value == "" {
 			os.Unsetenv(name)
-		} else {
-			os.Setenv(name, value)
+			continue
 		}
+		os.Setenv(name, value)
 	}
 	command.Env = os.Environ()
 
@@ -25,8 +25,8 @@ func RunCmd(cmd []string, env Environment) (returnCode int) {
 
 	err := command.Run()
 	if err != nil {
+		fmt.Printf("Got error while running command: %v\n", err)
 		if exitError, ok := err.(*exec.ExitError); ok { //nolint:errorlint. Мы знаем, что ошибка будет без вложенностей
-			fmt.Printf("Got error while running command: %v\n", err)
 			return exitError.ExitCode()
 		}
 		return 1

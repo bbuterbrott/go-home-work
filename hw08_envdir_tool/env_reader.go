@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"errors"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -18,14 +17,6 @@ type Environment map[string]string
 func ReadDir(dir string) (Environment, error) {
 	env := make(map[string]string)
 
-	dirStat, err := os.Stat(dir)
-	if err != nil {
-		return nil, err
-	}
-	if !dirStat.IsDir() {
-		return nil, fmt.Errorf("'%v' is not a directory", dir)
-	}
-
 	fileStats, err := ioutil.ReadDir(dir)
 	if err != nil {
 		return nil, err
@@ -34,38 +25,31 @@ func ReadDir(dir string) (Environment, error) {
 	for _, fileStat := range fileStats {
 		fileName := strings.TrimSpace(fileStat.Name())
 
+		if fileStat.IsDir() {
+			continue
+		}
+
 		if strings.Contains(fileName, "=") {
-			return nil, fmt.Errorf("env file name (%v) shouldn't contain '='", fileName)
+			continue
 		}
 
 		file, err := os.Open(path.Join(dir, fileName))
 		if err != nil {
 			return nil, err
 		}
+		defer file.Close()
 
-		runes := make([]rune, 0)
 		reader := bufio.NewReader(file)
-		for {
-			r, _, err := reader.ReadRune()
-			if err != nil {
-				if errors.Is(err, io.EOF) {
-					break
-				}
+
+		firstLine, err := reader.ReadString('\n')
+		if err != nil {
+			if !errors.Is(err, io.EOF) {
 				return nil, err
 			}
-
-			if r == '\n' {
-				break
-			}
-
-			if r == 0 {
-				r = '\n'
-			}
-
-			runes = append(runes, r)
 		}
 
-		firstLine := string(runes)
+		firstLine = strings.ReplaceAll(firstLine, "\000", "\n")
+
 		env[fileName] = strings.TrimRight(firstLine, "\t \n")
 	}
 

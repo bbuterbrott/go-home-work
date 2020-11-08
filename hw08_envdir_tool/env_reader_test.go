@@ -22,13 +22,17 @@ func TestReadDir(t *testing.T) {
 
 	t.Run("= in name", func(t *testing.T) {
 		env, err := ReadDir("testdata/env-error")
-		require.EqualError(t, err, "env file name (BAR=) shouldn't contain '='")
-		require.Nil(t, env)
+
+		require.NoError(t, err)
+
+		expectedEnv := Environment(make(map[string]string, 0))
+		expectedEnv["BAR"] = "bar"
+		require.Equal(t, expectedEnv, env, "Environments doesn't match")
 	})
 
 	t.Run("not a folder", func(t *testing.T) {
 		env, err := ReadDir("testdata/error.sh")
-		require.EqualError(t, err, "'testdata/error.sh' is not a directory")
+		require.EqualError(t, err, "readdirent: not a directory")
 		require.Nil(t, env)
 	})
 }
