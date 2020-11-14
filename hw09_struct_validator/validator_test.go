@@ -23,6 +23,8 @@ type (
 		Phones    []string   `validate:"len:11"`
 		JobEmails []string   `validate:"regexp:^\\w+@\\w+\\.\\w+$"`
 		JobRoles  []UserRole `validate:"in:admin,stuff"`
+		Number    int        `validate:"in:10,11"`
+		Numbers   []int      `validate:"in:10,11"`
 		meta      json.RawMessage
 	}
 
@@ -65,27 +67,20 @@ func TestValidate(t *testing.T) {
 				Phones:    []string{"12345678901", "12345678902"},
 				JobEmails: []string{"abs@ddd.com", "abs2@ddd.com"},
 				JobRoles:  []UserRole{"admin", "stuff"},
+				Number:    11,
+				Numbers:   []int{10, 11},
 				meta:      json.RawMessage{},
 			},
 			expectedErr: nil,
 		},
-		// empty values
+		// zero values
 		{
-			in: User{
-				ID:        "",
-				Name:      "",
-				Age:       0,
-				Email:     "",
-				Role:      "",
-				Phones:    []string{},
-				JobEmails: []string{},
-				JobRoles:  []UserRole{},
-				meta:      json.RawMessage{},
-			},
+			in: User{},
 			expectedErr: ValidationErrors{
 				ValidationError{Field: "ID", Err: errors.New("length must be 36")},
 				ValidationError{Field: "Age", Err: errors.New("value must be greater than '18'")},
 				ValidationError{Field: "Role", Err: errors.New("value must be one of '[admin stuff]'")},
+				ValidationError{Field: "Number", Err: errors.New("value must be one of '[10 11]'")},
 			},
 		},
 		// without validation tags
@@ -124,6 +119,7 @@ func TestValidate(t *testing.T) {
 				ID:     "123456798132416549687946513215649687",
 				Age:    19,
 				Role:   "admin",
+				Number: 11,
 				Phones: []string{"12345678901", "1234567890"},
 			},
 			expectedErr: ValidationErrors{ValidationError{Field: "Phones", Err: errors.New("all elements in slice must have length 11")}},
@@ -131,10 +127,11 @@ func TestValidate(t *testing.T) {
 		// regex
 		{
 			in: User{
-				ID:    "123456798132416549687946513215649687",
-				Age:   19,
-				Role:  "admin",
-				Email: "asd",
+				ID:     "123456798132416549687946513215649687",
+				Age:    19,
+				Role:   "admin",
+				Number: 11,
+				Email:  "asd",
 			},
 			expectedErr: ValidationErrors{ValidationError{Field: "Email", Err: errors.New("must match regex '^\\w+@\\w+\\.\\w+$'")}},
 		},
@@ -144,6 +141,7 @@ func TestValidate(t *testing.T) {
 				ID:        "123456798132416549687946513215649687",
 				Age:       19,
 				Role:      "admin",
+				Number:    11,
 				JobEmails: []string{"abs@ddd.com", "asd"},
 			},
 			expectedErr: ValidationErrors{ValidationError{Field: "JobEmails", Err: errors.New("all elements in slice must match regex '^\\w+@\\w+\\.\\w+$'")}},
@@ -151,11 +149,15 @@ func TestValidate(t *testing.T) {
 		// in
 		{
 			in: User{
-				ID:   "123456798132416549687946513215649687",
-				Age:  19,
-				Role: "a",
+				ID:     "123456798132416549687946513215649687",
+				Age:    19,
+				Role:   "a",
+				Number: 12,
 			},
-			expectedErr: ValidationErrors{ValidationError{Field: "Role", Err: errors.New("value must be one of '[admin stuff]'")}},
+			expectedErr: ValidationErrors{
+				ValidationError{Field: "Role", Err: errors.New("value must be one of '[admin stuff]'")},
+				ValidationError{Field: "Number", Err: errors.New("value must be one of '[10 11]'")},
+			},
 		},
 		// in slice
 		{
@@ -164,16 +166,22 @@ func TestValidate(t *testing.T) {
 				Age:      19,
 				Role:     "admin",
 				JobRoles: []UserRole{"admin", "s"},
+				Number:   11,
+				Numbers:  []int{11, 12},
 			},
-			expectedErr: ValidationErrors{ValidationError{Field: "JobRoles", Err: errors.New("all elements in slice must have one value of '[admin stuff]'")}},
+			expectedErr: ValidationErrors{
+				ValidationError{Field: "JobRoles", Err: errors.New("all elements in slice must have one value of '[admin stuff]'")},
+				ValidationError{Field: "Numbers", Err: errors.New("all elements in slice must have one value of '[10 11]'")},
+			},
 		},
 		// min, min slice,
 		{
 			in: User{
-				ID:   "123456798132416549687946513215649687",
-				Age:  13,
-				Ages: []int{20, 13},
-				Role: "admin",
+				ID:     "123456798132416549687946513215649687",
+				Age:    13,
+				Ages:   []int{20, 13},
+				Role:   "admin",
+				Number: 11,
 			},
 			expectedErr: ValidationErrors{
 				ValidationError{Field: "Age", Err: errors.New("value must be greater than '18'")},
@@ -183,10 +191,11 @@ func TestValidate(t *testing.T) {
 		// max, max slice
 		{
 			in: User{
-				ID:   "123456798132416549687946513215649687",
-				Age:  30,
-				Ages: []int{20, 30},
-				Role: "admin",
+				ID:     "123456798132416549687946513215649687",
+				Age:    30,
+				Ages:   []int{20, 30},
+				Role:   "admin",
+				Number: 11,
 			},
 			expectedErr: ValidationErrors{
 				ValidationError{Field: "Age", Err: errors.New("value must be less than '25'")},

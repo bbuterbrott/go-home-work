@@ -173,6 +173,22 @@ func validateIn(validationValue string, fieldName string, fieldValue reflect.Val
 		}
 		return &ValidationError{Field: fieldName, Err: fmt.Errorf("value must be one of '%v'", expValues)}
 
+	case reflect.Int:
+		v := fieldValue.Int()
+
+		for _, expStringValue := range expValues {
+			expValue, err := strconv.Atoi(expStringValue)
+			if err != nil {
+				fmt.Println("all in validation value must be int")
+				return nil
+			}
+
+			if int(v) == expValue {
+				return nil
+			}
+		}
+		return &ValidationError{Field: fieldName, Err: fmt.Errorf("value must be one of '%v'", expValues)}
+
 	case reflect.Slice:
 		sliceErrs := make([]ValidationError, 0)
 		for i := 0; i < fieldValue.Len(); i++ {
@@ -193,6 +209,7 @@ func validateIn(validationValue string, fieldName string, fieldValue reflect.Val
 	return nil
 }
 
+//nolint:dupl Конечно, эти методы очень похожи, но я считаю, что лучше логику оставить раздельной, чтобы её можно было исправлять по отдельности
 func validateMin(validationValue string, fieldName string, fieldValue reflect.Value) *ValidationError {
 	min, err := strconv.Atoi(validationValue)
 	if err != nil {
@@ -229,7 +246,7 @@ func validateMin(validationValue string, fieldName string, fieldValue reflect.Va
 	return nil
 }
 
-func validateMax(validationValue string, fieldName string, fieldValue reflect.Value) *ValidationError {
+func validateMax(validationValue string, fieldName string, fieldValue reflect.Value) *ValidationError { //nolint:dupl
 	max, err := strconv.Atoi(validationValue)
 	if err != nil {
 		fmt.Println("max validation value must be int")
