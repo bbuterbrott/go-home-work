@@ -207,6 +207,10 @@ func TestValidate(t *testing.T) {
 	for i, tt := range tests {
 		t.Run(fmt.Sprintf("case %d", i), func(t *testing.T) {
 			err := Validate(tt.in)
+			if tt.expectedErr == nil {
+				require.NoError(t, nil)
+				return
+			}
 			require.Equal(t, tt.expectedErr, err)
 		})
 	}

@@ -9,6 +9,10 @@ import (
 	"strings"
 )
 
+const (
+	validateTag = "validate"
+)
+
 type ValidationError struct {
 	Field string
 	Err   error
@@ -17,22 +21,29 @@ type ValidationError struct {
 type ValidationErrors []ValidationError
 
 func (v ValidationErrors) Error() string {
-	msgs := make([]string, 0)
-	msgs = append(msgs, "Validation errors: ")
-	for _, err := range v {
-		msgs = append(msgs, "field '"+err.Field+"': "+err.Err.Error())
+	var b strings.Builder
+	b.WriteString("Validation errors: ")
+	for i, err := range v {
+		b.WriteString("field '")
+		b.WriteString(err.Field)
+		b.WriteString("': ")
+		b.WriteString(err.Err.Error())
+		if i != len(v)-1 {
+			b.WriteString(", ")
+		}
 	}
-	return strings.Join(msgs, ", ")
+	return b.String()
 }
 
 func Validate(v interface{}) error {
-	errs := make([]ValidationError, 0)
+	var errs ValidationErrors
+
 	vValue := reflect.ValueOf(v)
 	vType := vValue.Type()
 	for i := 0; i < vType.NumField(); i++ {
 		structField := vType.Field(i)
 		value := vValue.Field(i)
-		tag := structField.Tag.Get("validate")
+		tag := structField.Tag.Get(validateTag)
 		if len(tag) == 0 {
 			continue
 		}
@@ -54,11 +65,7 @@ func Validate(v interface{}) error {
 		}
 	}
 
-	if len(errs) == 0 {
-		return nil
-	}
-
-	return ValidationErrors(errs)
+	return errs
 }
 
 func validateField(validationName string, validationValue string, fieldName string, fieldValue reflect.Value) *ValidationError {
@@ -102,7 +109,7 @@ func validateLen(validationValue string, fieldName string, fieldValue reflect.Va
 		}
 
 	case reflect.Slice:
-		sliceErrs := make([]ValidationError, 0)
+		sliceErrs := make([]ValidationError, 0, fieldValue.Len())
 		for i := 0; i < fieldValue.Len(); i++ {
 			sliceElem := fieldValue.Index(i)
 			if valErr := validateLen(validationValue, fieldName, sliceElem); valErr != nil {
@@ -135,7 +142,7 @@ func validateRegex(validationValue string, fieldName string, fieldValue reflect.
 		if len(s) == 0 {
 			return nil
 		}
-		if !r.Match(([]byte)(s)) {
+		if !r.MatchString(s) {
 			return &ValidationError{Field: fieldName, Err: fmt.Errorf("must match regex '%v'", validationValue)}
 		}
 
