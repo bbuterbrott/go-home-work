@@ -1,6 +1,7 @@
 package hw09_struct_validator //nolint:golint,stylecheck
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"reflect"
@@ -18,16 +19,57 @@ type ValidationError struct {
 	Err   error
 }
 
+type LenValidationError struct {
+	len int
+}
+
+func (e LenValidationError) Error() string {
+	return fmt.Sprintf("length must be %v", e.len)
+}
+
+type RegexpValidationError struct {
+	regexp string
+}
+
+func (e RegexpValidationError) Error() string {
+	return fmt.Sprintf("must match regex '%v'", e.regexp)
+}
+
+type InValidationError struct {
+	values []string
+}
+
+func (e InValidationError) Error() string {
+	return fmt.Sprintf("value must be one of '%v'", e.values)
+}
+
+func (e InValidationError) Is(target error) bool {
+	return errors.As(e, &target)
+}
+
+type MinValidationError struct {
+	min int
+}
+
+func (e MinValidationError) Error() string {
+	return fmt.Sprintf("value must be greater than '%v'", e.min)
+}
+
+type MaxValidationError struct {
+	max int
+}
+
+func (e MaxValidationError) Error() string {
+	return fmt.Sprintf("value must be less than '%v'", e.max)
+}
+
 type ValidationErrors []ValidationError
 
 func (v ValidationErrors) Error() string {
 	var b strings.Builder
 	b.WriteString("Validation errors: ")
 	for i, err := range v {
-		b.WriteString("field '")
-		b.WriteString(err.Field)
-		b.WriteString("': ")
-		b.WriteString(err.Err.Error())
+		b.WriteString(fmt.Sprintf("field '%v': %v", err.Field, err.Err.Error()))
 		if i != len(v)-1 {
 			b.WriteString(", ")
 		}
@@ -75,7 +117,7 @@ func validateField(validationName string, validationValue string, fieldName stri
 		return validateLen(validationValue, fieldName, fieldValue)
 
 	case "regexp":
-		return validateRegex(validationValue, fieldName, fieldValue)
+		return validateRegexp(validationValue, fieldName, fieldValue)
 
 	case "in":
 		return validateIn(validationValue, fieldName, fieldValue)
@@ -105,19 +147,19 @@ func validateLen(validationValue string, fieldName string, fieldValue reflect.Va
 	case reflect.String:
 		s := fieldValue.String()
 		if len(s) != expLen {
-			return &ValidationError{Field: fieldName, Err: fmt.Errorf("length must be %v", expLen)}
+			return &ValidationError{Field: fieldName, Err: LenValidationError{expLen}}
 		}
 
 	case reflect.Slice:
-		sliceErrs := make([]ValidationError, 0, fieldValue.Len())
+		var sliceErrs []ValidationError
 		for i := 0; i < fieldValue.Len(); i++ {
 			sliceElem := fieldValue.Index(i)
 			if valErr := validateLen(validationValue, fieldName, sliceElem); valErr != nil {
 				sliceErrs = append(sliceErrs, *valErr)
 			}
 		}
-		if len(sliceErrs) != 0 {
-			return &ValidationError{Field: fieldName, Err: fmt.Errorf("all elements in slice must have length %v", expLen)}
+		if sliceErrs != nil {
+			return &ValidationError{Field: fieldName, Err: LenValidationError{expLen}}
 		}
 
 	default:
@@ -128,7 +170,7 @@ func validateLen(validationValue string, fieldName string, fieldValue reflect.Va
 	return nil
 }
 
-func validateRegex(validationValue string, fieldName string, fieldValue reflect.Value) *ValidationError {
+func validateRegexp(validationValue string, fieldName string, fieldValue reflect.Value) *ValidationError {
 	r, err := regexp.Compile(validationValue)
 	if err != nil {
 		fmt.Printf("incorrect regexp '%v'\n", validationValue)
@@ -143,19 +185,19 @@ func validateRegex(validationValue string, fieldName string, fieldValue reflect.
 			return nil
 		}
 		if !r.MatchString(s) {
-			return &ValidationError{Field: fieldName, Err: fmt.Errorf("must match regex '%v'", validationValue)}
+			return &ValidationError{Field: fieldName, Err: RegexpValidationError{validationValue}}
 		}
 
 	case reflect.Slice:
-		sliceErrs := make([]ValidationError, 0)
+		var sliceErrs []ValidationError
 		for i := 0; i < fieldValue.Len(); i++ {
 			sliceElem := fieldValue.Index(i)
-			if valErr := validateRegex(validationValue, fieldName, sliceElem); valErr != nil {
+			if valErr := validateRegexp(validationValue, fieldName, sliceElem); valErr != nil {
 				sliceErrs = append(sliceErrs, *valErr)
 			}
 		}
-		if len(sliceErrs) != 0 {
-			return &ValidationError{Field: fieldName, Err: fmt.Errorf("all elements in slice must match regex '%v'", validationValue)}
+		if sliceErrs != nil {
+			return &ValidationError{Field: fieldName, Err: RegexpValidationError{validationValue}}
 		}
 
 	default:
@@ -178,7 +220,7 @@ func validateIn(validationValue string, fieldName string, fieldValue reflect.Val
 				return nil
 			}
 		}
-		return &ValidationError{Field: fieldName, Err: fmt.Errorf("value must be one of '%v'", expValues)}
+		return &ValidationError{Field: fieldName, Err: InValidationError{expValues}}
 
 	case reflect.Int:
 		v := fieldValue.Int()
@@ -194,18 +236,18 @@ func validateIn(validationValue string, fieldName string, fieldValue reflect.Val
 				return nil
 			}
 		}
-		return &ValidationError{Field: fieldName, Err: fmt.Errorf("value must be one of '%v'", expValues)}
+		return &ValidationError{Field: fieldName, Err: InValidationError{expValues}}
 
 	case reflect.Slice:
-		sliceErrs := make([]ValidationError, 0)
+		var sliceErrs []ValidationError
 		for i := 0; i < fieldValue.Len(); i++ {
 			sliceElem := fieldValue.Index(i)
 			if valErr := validateIn(validationValue, fieldName, sliceElem); valErr != nil {
 				sliceErrs = append(sliceErrs, *valErr)
 			}
 		}
-		if len(sliceErrs) != 0 {
-			return &ValidationError{Field: fieldName, Err: fmt.Errorf("all elements in slice must have one value of '%v'", expValues)}
+		if sliceErrs != nil {
+			return &ValidationError{Field: fieldName, Err: InValidationError{expValues}}
 		}
 
 	default:
@@ -229,20 +271,20 @@ func validateMin(validationValue string, fieldName string, fieldValue reflect.Va
 	case reflect.Int:
 		v := fieldValue.Int()
 		if int(v) < min {
-			return &ValidationError{Field: fieldName, Err: fmt.Errorf("value must be greater than '%v'", min)}
+			return &ValidationError{Field: fieldName, Err: MinValidationError{min}}
 		}
 		return nil
 
 	case reflect.Slice:
-		sliceErrs := make([]ValidationError, 0)
+		var sliceErrs []ValidationError
 		for i := 0; i < fieldValue.Len(); i++ {
 			sliceElem := fieldValue.Index(i)
 			if valErr := validateMin(validationValue, fieldName, sliceElem); valErr != nil {
 				sliceErrs = append(sliceErrs, *valErr)
 			}
 		}
-		if len(sliceErrs) != 0 {
-			return &ValidationError{Field: fieldName, Err: fmt.Errorf("all elements in slice must have value greater than '%v'", min)}
+		if sliceErrs != nil {
+			return &ValidationError{Field: fieldName, Err: MinValidationError{min}}
 		}
 
 	default:
@@ -265,20 +307,20 @@ func validateMax(validationValue string, fieldName string, fieldValue reflect.Va
 	case reflect.Int:
 		v := fieldValue.Int()
 		if int(v) > max {
-			return &ValidationError{Field: fieldName, Err: fmt.Errorf("value must be less than '%v'", max)}
+			return &ValidationError{Field: fieldName, Err: MaxValidationError{max}}
 		}
 		return nil
 
 	case reflect.Slice:
-		sliceErrs := make([]ValidationError, 0)
+		var sliceErrs []ValidationError
 		for i := 0; i < fieldValue.Len(); i++ {
 			sliceElem := fieldValue.Index(i)
 			if valErr := validateMax(validationValue, fieldName, sliceElem); valErr != nil {
 				sliceErrs = append(sliceErrs, *valErr)
 			}
 		}
-		if len(sliceErrs) != 0 {
-			return &ValidationError{Field: fieldName, Err: fmt.Errorf("all elements in slice must have value less than '%v'", max)}
+		if sliceErrs != nil {
+			return &ValidationError{Field: fieldName, Err: MaxValidationError{max}}
 		}
 
 	default:

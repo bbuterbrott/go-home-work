@@ -53,8 +53,8 @@ type (
 
 func TestValidate(t *testing.T) {
 	tests := []struct {
-		in          interface{}
-		expectedErr error
+		in             interface{}
+		expectedErrors ValidationErrors
 	}{
 		// success
 		{
@@ -71,16 +71,16 @@ func TestValidate(t *testing.T) {
 				Numbers:   []int{10, 11},
 				meta:      json.RawMessage{},
 			},
-			expectedErr: nil,
+			expectedErrors: nil,
 		},
 		// zero values
 		{
 			in: User{},
-			expectedErr: ValidationErrors{
-				ValidationError{Field: "ID", Err: errors.New("length must be 36")},
-				ValidationError{Field: "Age", Err: errors.New("value must be greater than '18'")},
-				ValidationError{Field: "Role", Err: errors.New("value must be one of '[admin stuff]'")},
-				ValidationError{Field: "Number", Err: errors.New("value must be one of '[10 11]'")},
+			expectedErrors: ValidationErrors{
+				ValidationError{Field: "ID", Err: LenValidationError{36}},
+				ValidationError{Field: "Age", Err: MinValidationError{18}},
+				ValidationError{Field: "Role", Err: InValidationError{[]string{"admin", "stuff"}}},
+				ValidationError{Field: "Number", Err: InValidationError{[]string{"10", "11"}}},
 			},
 		},
 		// without validation tags
@@ -90,7 +90,7 @@ func TestValidate(t *testing.T) {
 				Payload:   []byte{1, 2, 3},
 				Signature: []byte{2, 3, 4},
 			},
-			expectedErr: nil,
+			expectedErrors: nil,
 		},
 		// invalid field types
 		{
@@ -99,19 +99,19 @@ func TestValidate(t *testing.T) {
 				regex: 20,
 				in:    make(chan int),
 			},
-			expectedErr: nil,
+			expectedErrors: nil,
 		},
 		// unknown validation
 		{
 			in: UnknownValidation{
 				len: 10,
 			},
-			expectedErr: nil,
+			expectedErrors: nil,
 		},
 		// len
 		{
-			in:          App{Version: "123"},
-			expectedErr: ValidationErrors{ValidationError{Field: "Version", Err: errors.New("length must be 5")}},
+			in:             App{Version: "123"},
+			expectedErrors: ValidationErrors{ValidationError{Field: "Version", Err: LenValidationError{5}}},
 		},
 		// len slice
 		{
@@ -122,7 +122,7 @@ func TestValidate(t *testing.T) {
 				Number: 11,
 				Phones: []string{"12345678901", "1234567890"},
 			},
-			expectedErr: ValidationErrors{ValidationError{Field: "Phones", Err: errors.New("all elements in slice must have length 11")}},
+			expectedErrors: ValidationErrors{ValidationError{Field: "Phones", Err: LenValidationError{11}}},
 		},
 		// regex
 		{
@@ -133,7 +133,7 @@ func TestValidate(t *testing.T) {
 				Number: 11,
 				Email:  "asd",
 			},
-			expectedErr: ValidationErrors{ValidationError{Field: "Email", Err: errors.New("must match regex '^\\w+@\\w+\\.\\w+$'")}},
+			expectedErrors: ValidationErrors{ValidationError{Field: "Email", Err: RegexpValidationError{"^\\w+@\\w+\\.\\w+$"}}},
 		},
 		// regex slice
 		{
@@ -144,7 +144,7 @@ func TestValidate(t *testing.T) {
 				Number:    11,
 				JobEmails: []string{"abs@ddd.com", "asd"},
 			},
-			expectedErr: ValidationErrors{ValidationError{Field: "JobEmails", Err: errors.New("all elements in slice must match regex '^\\w+@\\w+\\.\\w+$'")}},
+			expectedErrors: ValidationErrors{ValidationError{Field: "JobEmails", Err: RegexpValidationError{"^\\w+@\\w+\\.\\w+$"}}},
 		},
 		// in
 		{
@@ -154,9 +154,9 @@ func TestValidate(t *testing.T) {
 				Role:   "a",
 				Number: 12,
 			},
-			expectedErr: ValidationErrors{
-				ValidationError{Field: "Role", Err: errors.New("value must be one of '[admin stuff]'")},
-				ValidationError{Field: "Number", Err: errors.New("value must be one of '[10 11]'")},
+			expectedErrors: ValidationErrors{
+				ValidationError{Field: "Role", Err: InValidationError{[]string{"admin", "stuff"}}},
+				ValidationError{Field: "Number", Err: InValidationError{[]string{"10", "11"}}},
 			},
 		},
 		// in slice
@@ -169,9 +169,9 @@ func TestValidate(t *testing.T) {
 				Number:   11,
 				Numbers:  []int{11, 12},
 			},
-			expectedErr: ValidationErrors{
-				ValidationError{Field: "JobRoles", Err: errors.New("all elements in slice must have one value of '[admin stuff]'")},
-				ValidationError{Field: "Numbers", Err: errors.New("all elements in slice must have one value of '[10 11]'")},
+			expectedErrors: ValidationErrors{
+				ValidationError{Field: "JobRoles", Err: InValidationError{[]string{"admin", "stuff"}}},
+				ValidationError{Field: "Numbers", Err: InValidationError{[]string{"10", "11"}}},
 			},
 		},
 		// min, min slice,
@@ -183,9 +183,9 @@ func TestValidate(t *testing.T) {
 				Role:   "admin",
 				Number: 11,
 			},
-			expectedErr: ValidationErrors{
-				ValidationError{Field: "Age", Err: errors.New("value must be greater than '18'")},
-				ValidationError{Field: "Ages", Err: errors.New("all elements in slice must have value greater than '18'")},
+			expectedErrors: ValidationErrors{
+				ValidationError{Field: "Age", Err: MinValidationError{18}},
+				ValidationError{Field: "Ages", Err: MinValidationError{18}},
 			},
 		},
 		// max, max slice
@@ -197,9 +197,9 @@ func TestValidate(t *testing.T) {
 				Role:   "admin",
 				Number: 11,
 			},
-			expectedErr: ValidationErrors{
-				ValidationError{Field: "Age", Err: errors.New("value must be less than '25'")},
-				ValidationError{Field: "Ages", Err: errors.New("all elements in slice must have value less than '25'")},
+			expectedErrors: ValidationErrors{
+				ValidationError{Field: "Age", Err: MaxValidationError{25}},
+				ValidationError{Field: "Ages", Err: MaxValidationError{25}},
 			},
 		},
 	}
@@ -207,11 +207,24 @@ func TestValidate(t *testing.T) {
 	for i, tt := range tests {
 		t.Run(fmt.Sprintf("case %d", i), func(t *testing.T) {
 			err := Validate(tt.in)
-			if tt.expectedErr == nil {
+			if tt.expectedErrors == nil {
 				require.NoError(t, nil)
 				return
 			}
-			require.Equal(t, tt.expectedErr, err)
+			validationErrors, ok := err.(ValidationErrors)
+			if !ok {
+				require.Fail(t, "Validate() should return ValidationErrors")
+			}
+			if len(tt.expectedErrors) != len(validationErrors) {
+				require.Fail(t, "Error slices len doesn't match. Expected: %#v, Actual %#v", tt.expectedErrors, validationErrors)
+			}
+			for j, expectedError := range tt.expectedErrors {
+				if !errors.Is(validationErrors[j].Err, expectedError.Err) {
+					require.Fail(t, fmt.Sprintf("Error should be of type '%T'. Actual '%T'\n", expectedError.Err, validationErrors[j].Err))
+				}
+			}
+
+			require.Equal(t, tt.expectedErrors, err)
 		})
 	}
 }
