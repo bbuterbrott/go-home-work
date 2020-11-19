@@ -122,7 +122,7 @@ func TestValidate(t *testing.T) {
 				Number: 11,
 				Phones: []string{"12345678901", "1234567890"},
 			},
-			expectedErrors: ValidationErrors{ValidationError{Field: "Phones", Err: LenValidationError{11}}},
+			expectedErrors: ValidationErrors{ValidationError{Field: "Phones[1]", Err: LenValidationError{11}}},
 		},
 		// regex
 		{
@@ -144,7 +144,7 @@ func TestValidate(t *testing.T) {
 				Number:    11,
 				JobEmails: []string{"abs@ddd.com", "asd"},
 			},
-			expectedErrors: ValidationErrors{ValidationError{Field: "JobEmails", Err: RegexpValidationError{"^\\w+@\\w+\\.\\w+$"}}},
+			expectedErrors: ValidationErrors{ValidationError{Field: "JobEmails[1]", Err: RegexpValidationError{"^\\w+@\\w+\\.\\w+$"}}},
 		},
 		// in
 		{
@@ -170,8 +170,8 @@ func TestValidate(t *testing.T) {
 				Numbers:  []int{11, 12},
 			},
 			expectedErrors: ValidationErrors{
-				ValidationError{Field: "JobRoles", Err: InValidationError{[]string{"admin", "stuff"}}},
-				ValidationError{Field: "Numbers", Err: InValidationError{[]string{"10", "11"}}},
+				ValidationError{Field: "JobRoles[1]", Err: InValidationError{[]string{"admin", "stuff"}}},
+				ValidationError{Field: "Numbers[1]", Err: InValidationError{[]string{"10", "11"}}},
 			},
 		},
 		// min, min slice,
@@ -185,7 +185,7 @@ func TestValidate(t *testing.T) {
 			},
 			expectedErrors: ValidationErrors{
 				ValidationError{Field: "Age", Err: MinValidationError{18}},
-				ValidationError{Field: "Ages", Err: MinValidationError{18}},
+				ValidationError{Field: "Ages[1]", Err: MinValidationError{18}},
 			},
 		},
 		// max, max slice
@@ -199,7 +199,7 @@ func TestValidate(t *testing.T) {
 			},
 			expectedErrors: ValidationErrors{
 				ValidationError{Field: "Age", Err: MaxValidationError{25}},
-				ValidationError{Field: "Ages", Err: MaxValidationError{25}},
+				ValidationError{Field: "Ages[1]", Err: MaxValidationError{25}},
 			},
 		},
 	}

@@ -100,9 +100,9 @@ func Validate(v interface{}) error {
 
 			validationName := splitVal[0]
 			validationValue := splitVal[1]
-			err := validateField(validationName, validationValue, structField.Name, value)
-			if err != nil {
-				errs = append(errs, *err)
+			fieldErrs := validateField(validationName, validationValue, structField.Name, value)
+			if fieldErrs != nil {
+				errs = append(errs, fieldErrs...)
 			}
 		}
 	}
@@ -110,7 +110,7 @@ func Validate(v interface{}) error {
 	return errs
 }
 
-func validateField(validationName string, validationValue string, fieldName string, fieldValue reflect.Value) *ValidationError {
+func validateField(validationName string, validationValue string, fieldName string, fieldValue reflect.Value) []ValidationError {
 	fmt.Printf("validating field '%v' with tag name: '%v', tag value: '%v' and field value '%v'\n", fieldName, validationName, validationValue, fieldValue)
 	switch validationName {
 	case "len":
@@ -135,7 +135,9 @@ func validateField(validationName string, validationValue string, fieldName stri
 	return nil
 }
 
-func validateLen(validationValue string, fieldName string, fieldValue reflect.Value) *ValidationError {
+//nolint:dupl Конечно, эти методы очень похожи, но я считаю, что лучше логику оставить раздельной, чтобы её можно было исправлять по отдельности
+func validateLen(validationValue string, fieldName string, fieldValue reflect.Value) []ValidationError {
+	var errs []ValidationError
 	expLen, err := strconv.Atoi(validationValue)
 	if err != nil {
 		fmt.Println("len validation value must be int")
@@ -147,30 +149,27 @@ func validateLen(validationValue string, fieldName string, fieldValue reflect.Va
 	case reflect.String:
 		s := fieldValue.String()
 		if len(s) != expLen {
-			return &ValidationError{Field: fieldName, Err: LenValidationError{expLen}}
+			return append(errs, ValidationError{Field: fieldName, Err: LenValidationError{expLen}})
 		}
+		return nil
 
 	case reflect.Slice:
-		var sliceErrs []ValidationError
 		for i := 0; i < fieldValue.Len(); i++ {
 			sliceElem := fieldValue.Index(i)
-			if valErr := validateLen(validationValue, fieldName, sliceElem); valErr != nil {
-				sliceErrs = append(sliceErrs, *valErr)
+			if valErrs := validateLen(validationValue, fieldName+"["+strconv.Itoa(i)+"]", sliceElem); valErrs != nil {
+				errs = append(errs, valErrs...)
 			}
 		}
-		if sliceErrs != nil {
-			return &ValidationError{Field: fieldName, Err: LenValidationError{expLen}}
-		}
+		return errs
 
 	default:
 		fmt.Println("invalid field type for len validation")
 		return nil
 	}
-
-	return nil
 }
 
-func validateRegexp(validationValue string, fieldName string, fieldValue reflect.Value) *ValidationError {
+func validateRegexp(validationValue string, fieldName string, fieldValue reflect.Value) []ValidationError {
+	var errs []ValidationError
 	r, err := regexp.Compile(validationValue)
 	if err != nil {
 		fmt.Printf("incorrect regexp '%v'\n", validationValue)
@@ -185,30 +184,27 @@ func validateRegexp(validationValue string, fieldName string, fieldValue reflect
 			return nil
 		}
 		if !r.MatchString(s) {
-			return &ValidationError{Field: fieldName, Err: RegexpValidationError{validationValue}}
+			return append(errs, ValidationError{Field: fieldName, Err: RegexpValidationError{validationValue}})
 		}
+		return nil
 
 	case reflect.Slice:
-		var sliceErrs []ValidationError
 		for i := 0; i < fieldValue.Len(); i++ {
 			sliceElem := fieldValue.Index(i)
-			if valErr := validateRegexp(validationValue, fieldName, sliceElem); valErr != nil {
-				sliceErrs = append(sliceErrs, *valErr)
+			if valErrs := validateRegexp(validationValue, fieldName+"["+strconv.Itoa(i)+"]", sliceElem); valErrs != nil {
+				errs = append(errs, valErrs...)
 			}
 		}
-		if sliceErrs != nil {
-			return &ValidationError{Field: fieldName, Err: RegexpValidationError{validationValue}}
-		}
+		return errs
 
 	default:
 		fmt.Println("invalid field type for regex validation")
 		return nil
 	}
-
-	return nil
 }
 
-func validateIn(validationValue string, fieldName string, fieldValue reflect.Value) *ValidationError {
+func validateIn(validationValue string, fieldName string, fieldValue reflect.Value) []ValidationError {
+	var errs []ValidationError
 	expValues := strings.Split(validationValue, ",")
 
 	k := fieldValue.Kind()
@@ -220,7 +216,7 @@ func validateIn(validationValue string, fieldName string, fieldValue reflect.Val
 				return nil
 			}
 		}
-		return &ValidationError{Field: fieldName, Err: InValidationError{expValues}}
+		return append(errs, ValidationError{Field: fieldName, Err: InValidationError{expValues}})
 
 	case reflect.Int:
 		v := fieldValue.Int()
@@ -236,30 +232,26 @@ func validateIn(validationValue string, fieldName string, fieldValue reflect.Val
 				return nil
 			}
 		}
-		return &ValidationError{Field: fieldName, Err: InValidationError{expValues}}
+		return append(errs, ValidationError{Field: fieldName, Err: InValidationError{expValues}})
 
 	case reflect.Slice:
-		var sliceErrs []ValidationError
 		for i := 0; i < fieldValue.Len(); i++ {
 			sliceElem := fieldValue.Index(i)
-			if valErr := validateIn(validationValue, fieldName, sliceElem); valErr != nil {
-				sliceErrs = append(sliceErrs, *valErr)
+			if valErrs := validateIn(validationValue, fieldName+"["+strconv.Itoa(i)+"]", sliceElem); valErrs != nil {
+				errs = append(errs, valErrs...)
 			}
 		}
-		if sliceErrs != nil {
-			return &ValidationError{Field: fieldName, Err: InValidationError{expValues}}
-		}
+		return errs
 
 	default:
 		fmt.Println("invalid field type for in validation")
 		return nil
 	}
-
-	return nil
 }
 
-//nolint:dupl Конечно, эти методы очень похожи, но я считаю, что лучше логику оставить раздельной, чтобы её можно было исправлять по отдельности
-func validateMin(validationValue string, fieldName string, fieldValue reflect.Value) *ValidationError {
+//nolint:dupl
+func validateMin(validationValue string, fieldName string, fieldValue reflect.Value) []ValidationError {
+	var errs []ValidationError
 	min, err := strconv.Atoi(validationValue)
 	if err != nil {
 		fmt.Println("min validation value must be int")
@@ -271,31 +263,27 @@ func validateMin(validationValue string, fieldName string, fieldValue reflect.Va
 	case reflect.Int:
 		v := fieldValue.Int()
 		if int(v) < min {
-			return &ValidationError{Field: fieldName, Err: MinValidationError{min}}
+			return append(errs, ValidationError{Field: fieldName, Err: MinValidationError{min}})
 		}
 		return nil
 
 	case reflect.Slice:
-		var sliceErrs []ValidationError
 		for i := 0; i < fieldValue.Len(); i++ {
 			sliceElem := fieldValue.Index(i)
-			if valErr := validateMin(validationValue, fieldName, sliceElem); valErr != nil {
-				sliceErrs = append(sliceErrs, *valErr)
+			if valErrs := validateMin(validationValue, fieldName+"["+strconv.Itoa(i)+"]", sliceElem); valErrs != nil {
+				errs = append(errs, valErrs...)
 			}
 		}
-		if sliceErrs != nil {
-			return &ValidationError{Field: fieldName, Err: MinValidationError{min}}
-		}
+		return errs
 
 	default:
 		fmt.Println("invalid field type for min validation")
 		return nil
 	}
-
-	return nil
 }
 
-func validateMax(validationValue string, fieldName string, fieldValue reflect.Value) *ValidationError { //nolint:dupl
+func validateMax(validationValue string, fieldName string, fieldValue reflect.Value) []ValidationError { //nolint:dupl
+	var errs []ValidationError
 	max, err := strconv.Atoi(validationValue)
 	if err != nil {
 		fmt.Println("max validation value must be int")
@@ -307,25 +295,20 @@ func validateMax(validationValue string, fieldName string, fieldValue reflect.Va
 	case reflect.Int:
 		v := fieldValue.Int()
 		if int(v) > max {
-			return &ValidationError{Field: fieldName, Err: MaxValidationError{max}}
+			return append(errs, ValidationError{Field: fieldName, Err: MaxValidationError{max}})
 		}
-		return nil
 
 	case reflect.Slice:
-		var sliceErrs []ValidationError
 		for i := 0; i < fieldValue.Len(); i++ {
 			sliceElem := fieldValue.Index(i)
-			if valErr := validateMax(validationValue, fieldName, sliceElem); valErr != nil {
-				sliceErrs = append(sliceErrs, *valErr)
+			if valErrs := validateMax(validationValue, fieldName+"["+strconv.Itoa(i)+"]", sliceElem); valErrs != nil {
+				errs = append(errs, valErrs...)
 			}
 		}
-		if sliceErrs != nil {
-			return &ValidationError{Field: fieldName, Err: MaxValidationError{max}}
-		}
+		return errs
 
 	default:
 		fmt.Println("invalid field type for max validation")
-		return nil
 	}
 
 	return nil
