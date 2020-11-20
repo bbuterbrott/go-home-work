@@ -53,8 +53,8 @@ type (
 
 func TestValidate(t *testing.T) {
 	tests := []struct {
-		in             interface{}
-		expectedErrors ValidationErrors
+		in     interface{}
+		expErr error
 	}{
 		// success
 		{
@@ -71,12 +71,12 @@ func TestValidate(t *testing.T) {
 				Numbers:   []int{10, 11},
 				meta:      json.RawMessage{},
 			},
-			expectedErrors: nil,
+			expErr: nil,
 		},
 		// zero values
 		{
 			in: User{},
-			expectedErrors: ValidationErrors{
+			expErr: ValidationErrors{
 				ValidationError{Field: "ID", Err: LenValidationError{36}},
 				ValidationError{Field: "Age", Err: MinValidationError{18}},
 				ValidationError{Field: "Role", Err: InValidationError{[]string{"admin", "stuff"}}},
@@ -90,7 +90,7 @@ func TestValidate(t *testing.T) {
 				Payload:   []byte{1, 2, 3},
 				Signature: []byte{2, 3, 4},
 			},
-			expectedErrors: nil,
+			expErr: nil,
 		},
 		// invalid field types
 		{
@@ -99,19 +99,24 @@ func TestValidate(t *testing.T) {
 				regex: 20,
 				in:    make(chan int),
 			},
-			expectedErrors: nil,
+			expErr: nil,
 		},
 		// unknown validation
 		{
 			in: UnknownValidation{
 				len: 10,
 			},
-			expectedErrors: nil,
+			expErr: nil,
+		},
+		// not a struct
+		{
+			in:     10,
+			expErr: IncorrectTypeError{10},
 		},
 		// len
 		{
-			in:             App{Version: "123"},
-			expectedErrors: ValidationErrors{ValidationError{Field: "Version", Err: LenValidationError{5}}},
+			in:     App{Version: "123"},
+			expErr: ValidationErrors{ValidationError{Field: "Version", Err: LenValidationError{5}}},
 		},
 		// len slice
 		{
@@ -122,7 +127,7 @@ func TestValidate(t *testing.T) {
 				Number: 11,
 				Phones: []string{"12345678901", "1234567890"},
 			},
-			expectedErrors: ValidationErrors{ValidationError{Field: "Phones[1]", Err: LenValidationError{11}}},
+			expErr: ValidationErrors{ValidationError{Field: "Phones[1]", Err: LenValidationError{11}}},
 		},
 		// regex
 		{
@@ -133,7 +138,7 @@ func TestValidate(t *testing.T) {
 				Number: 11,
 				Email:  "asd",
 			},
-			expectedErrors: ValidationErrors{ValidationError{Field: "Email", Err: RegexpValidationError{"^\\w+@\\w+\\.\\w+$"}}},
+			expErr: ValidationErrors{ValidationError{Field: "Email", Err: RegexpValidationError{"^\\w+@\\w+\\.\\w+$"}}},
 		},
 		// regex slice
 		{
@@ -144,7 +149,7 @@ func TestValidate(t *testing.T) {
 				Number:    11,
 				JobEmails: []string{"abs@ddd.com", "asd"},
 			},
-			expectedErrors: ValidationErrors{ValidationError{Field: "JobEmails[1]", Err: RegexpValidationError{"^\\w+@\\w+\\.\\w+$"}}},
+			expErr: ValidationErrors{ValidationError{Field: "JobEmails[1]", Err: RegexpValidationError{"^\\w+@\\w+\\.\\w+$"}}},
 		},
 		// in
 		{
@@ -154,7 +159,7 @@ func TestValidate(t *testing.T) {
 				Role:   "a",
 				Number: 12,
 			},
-			expectedErrors: ValidationErrors{
+			expErr: ValidationErrors{
 				ValidationError{Field: "Role", Err: InValidationError{[]string{"admin", "stuff"}}},
 				ValidationError{Field: "Number", Err: InValidationError{[]string{"10", "11"}}},
 			},
@@ -169,7 +174,7 @@ func TestValidate(t *testing.T) {
 				Number:   11,
 				Numbers:  []int{11, 12},
 			},
-			expectedErrors: ValidationErrors{
+			expErr: ValidationErrors{
 				ValidationError{Field: "JobRoles[1]", Err: InValidationError{[]string{"admin", "stuff"}}},
 				ValidationError{Field: "Numbers[1]", Err: InValidationError{[]string{"10", "11"}}},
 			},
@@ -183,7 +188,7 @@ func TestValidate(t *testing.T) {
 				Role:   "admin",
 				Number: 11,
 			},
-			expectedErrors: ValidationErrors{
+			expErr: ValidationErrors{
 				ValidationError{Field: "Age", Err: MinValidationError{18}},
 				ValidationError{Field: "Ages[1]", Err: MinValidationError{18}},
 			},
@@ -197,7 +202,7 @@ func TestValidate(t *testing.T) {
 				Role:   "admin",
 				Number: 11,
 			},
-			expectedErrors: ValidationErrors{
+			expErr: ValidationErrors{
 				ValidationError{Field: "Age", Err: MaxValidationError{25}},
 				ValidationError{Field: "Ages[1]", Err: MaxValidationError{25}},
 			},
@@ -207,24 +212,32 @@ func TestValidate(t *testing.T) {
 	for i, tt := range tests {
 		t.Run(fmt.Sprintf("case %d", i), func(t *testing.T) {
 			err := Validate(tt.in)
-			if tt.expectedErrors == nil {
+			if tt.expErr == nil {
 				require.NoError(t, nil)
 				return
 			}
-			validationErrors, ok := err.(ValidationErrors)
+			valErrs, ok := err.(ValidationErrors)
 			if !ok {
-				require.Fail(t, "Validate() should return ValidationErrors")
-			}
-			if len(tt.expectedErrors) != len(validationErrors) {
-				require.Fail(t, "Error slices len doesn't match. Expected: %#v, Actual %#v", tt.expectedErrors, validationErrors)
-			}
-			for j, expectedError := range tt.expectedErrors {
-				if !errors.Is(validationErrors[j].Err, expectedError.Err) {
-					require.Fail(t, fmt.Sprintf("Error should be of type '%T'. Actual '%T'\n", expectedError.Err, validationErrors[j].Err))
+				itErr, ok := err.(IncorrectTypeError)
+				if !ok {
+					require.Fail(t, "Validate() should return error of type ValidationErrors or IncorrectTypeError")
 				}
+				require.Equal(t, tt.expErr, itErr)
+				return
 			}
 
-			require.Equal(t, tt.expectedErrors, err)
+			expValErrs := tt.expErr.(ValidationErrors)
+			if len(expValErrs) != len(valErrs) {
+				require.Fail(t, "Error slices len doesn't match. Expected: %#v, Actual %#v", expValErrs, valErrs)
+			}
+			for j, expValErr := range expValErrs {
+				actValErr := valErrs[j]
+				if !errors.Is(actValErr.Err, expValErr.Err) {
+					require.Fail(t, fmt.Sprintf("Error should be of type '%T'. Actual '%T'\n", expValErr.Err, actValErr.Err))
+				}
+				require.Equal(t, expValErr.Field, actValErr.Field)
+				require.Equal(t, expValErr.Err, actValErr.Err)
+			}
 		})
 	}
 }

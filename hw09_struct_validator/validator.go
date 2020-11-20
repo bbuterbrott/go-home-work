@@ -14,6 +14,14 @@ const (
 	validateTag = "validate"
 )
 
+type IncorrectTypeError struct {
+	v interface{}
+}
+
+func (e IncorrectTypeError) Error() string {
+	return fmt.Sprintf("couldn't validate interface{} of type %T\n", e.v)
+}
+
 type ValidationError struct {
 	Field string
 	Err   error
@@ -78,10 +86,13 @@ func (v ValidationErrors) Error() string {
 }
 
 func Validate(v interface{}) error {
-	var errs ValidationErrors
-
 	vValue := reflect.ValueOf(v)
 	vType := vValue.Type()
+	if vType.Kind() != reflect.Struct {
+		return IncorrectTypeError{v}
+	}
+
+	var errs ValidationErrors
 	for i := 0; i < vType.NumField(); i++ {
 		structField := vType.Field(i)
 		value := vValue.Field(i)
