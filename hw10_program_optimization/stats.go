@@ -1,67 +1,99 @@
 package hw10_program_optimization //nolint:golint,stylecheck
 
 import (
-	"encoding/json"
-	"fmt"
+	"bufio"
 	"io"
-	"io/ioutil"
-	"regexp"
-	"strings"
+	"unicode"
 )
-
-type User struct {
-	ID       int
-	Name     string
-	Username string
-	Email    string
-	Phone    string
-	Password string
-	Address  string
-}
 
 type DomainStat map[string]int
 
 func GetDomainStat(r io.Reader, domain string) (DomainStat, error) {
-	u, err := getUsers(r)
-	if err != nil {
-		return nil, fmt.Errorf("get users error: %s", err)
-	}
-	return countDomains(u, domain)
+	return countDomains(r, domain), nil
 }
 
-type users [100_000]User
-
-func getUsers(r io.Reader) (result users, err error) {
-	content, err := ioutil.ReadAll(r)
-	if err != nil {
-		return
-	}
-
-	lines := strings.Split(string(content), "\n")
-	for i, line := range lines {
-		var user User
-		if err = json.Unmarshal([]byte(line), &user); err != nil {
-			return
-		}
-		result[i] = user
-	}
-	return
-}
-
-func countDomains(u users, domain string) (DomainStat, error) {
+// за быстродействие частенько приходится платить читаемостью кода
+//nolint: funlen
+func countDomains(r io.Reader, firstLvlDomain string) DomainStat {
 	result := make(DomainStat)
+	prefixString := "\"Email\":\""
+	prefixStringRunes := []rune(prefixString)
 
-	for _, user := range u {
-		matched, err := regexp.Match("\\."+domain, []byte(user.Email))
-		if err != nil {
-			return nil, err
+	// подразумевается, что входной json нормализован, валиден и не содержит лишних пробелов
+	// если нам важно быстродействие, то, я думаю, что это выполнимое условие
+	br := bufio.NewReader(r)
+	var topDomainRunes []rune
+	var domainRunes []rune
+	inEmail := false
+	inDomain := false
+	inTopDomain := false
+	var index int
+	for {
+		r, _, err := br.ReadRune()
+
+		//nolint: errorlint
+		// т.к. error.Is делается медленно
+		if err == io.EOF {
+			break
 		}
 
-		if matched {
-			num := result[strings.ToLower(strings.SplitN(user.Email, "@", 2)[1])]
-			num++
-			result[strings.ToLower(strings.SplitN(user.Email, "@", 2)[1])] = num
+		if !inEmail {
+			if index == len(prefixStringRunes)-1 {
+				inEmail = true
+				continue
+			}
+
+			if r == prefixStringRunes[index] {
+				index++
+				continue
+			}
+
+			index = 0
+			continue
+		}
+
+		// конец email
+		if r == '"' {
+			topDomain := string(topDomainRunes)
+
+			if topDomain == firstLvlDomain {
+				domain := string(domainRunes)
+				num := result[domain]
+				num++
+				result[domain] = num
+			}
+
+			topDomainRunes = nil
+			domainRunes = nil
+			inEmail = false
+			inDomain = false
+			inTopDomain = false
+			index = 0
+
+			continue
+		}
+
+		// начало домена
+		if r == '@' {
+			inDomain = true
+			continue
+		}
+
+		if inDomain {
+			domainRunes = append(domainRunes, unicode.ToLower(r))
+
+			// начало домена первого уровня
+			// не учитывается вариант с email с доменом третьего уровня, например: test@sub.domain.com
+			if r == '.' {
+				inTopDomain = true
+				continue
+			}
+
+			if inTopDomain {
+				topDomainRunes = append(topDomainRunes, unicode.ToLower(r))
+			}
 		}
 	}
-	return result, nil
+
+	return result
 }
