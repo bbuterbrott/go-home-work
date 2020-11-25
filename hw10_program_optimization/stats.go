@@ -83,7 +83,7 @@ func aggregateResults(result DomainStat, resultCh <-chan string, doneCh chan<- s
 
 // подразумевается, что входной json нормализован, валиден и не содержит лишних пробелов
 // если нам важно быстродействие, то, я думаю, что это выполнимое условие
-// за быстродействие частенько приходится платить читаемостью кода
+// (пояснение к nolint) за быстродействие частенько приходится платить читаемостью кода.
 //nolint: funlen, gocognit
 func processLine(firstLvlDomain string, prefixStringRunes []rune, wg *sync.WaitGroup, queueCh <-chan string, resultCh chan<- string) {
 	for {
