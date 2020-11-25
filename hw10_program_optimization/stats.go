@@ -21,15 +21,18 @@ func countDomains(r io.Reader, firstLvlDomain string) DomainStat {
 
 	// подразумевается, что входной json нормализован, валиден и не содержит лишних пробелов
 	// если нам важно быстродействие, то, я думаю, что это выполнимое условие
-	br := bufio.NewReader(r)
 	var topDomainRunes []rune
 	var domainRunes []rune
 	inEmail := false
 	inDomain := false
 	inTopDomain := false
 	var index int
+	br := bufio.NewReader(r)
 	for {
-		r, _, err := br.ReadRune()
+		// Закрываем глаза на то, что данные могут быть в UTF-8
+		b, err := br.ReadByte()
+
+		r := rune(b)
 
 		//nolint: errorlint
 		// т.к. error.Is делается медленно
