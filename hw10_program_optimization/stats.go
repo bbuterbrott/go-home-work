@@ -1,67 +1,151 @@
 package hw10_program_optimization //nolint:golint,stylecheck
 
 import (
-	"encoding/json"
-	"fmt"
+	"bufio"
 	"io"
-	"io/ioutil"
-	"regexp"
+	"runtime"
 	"strings"
+	"sync"
+	"unicode"
 )
-
-type User struct {
-	ID       int
-	Name     string
-	Username string
-	Email    string
-	Phone    string
-	Password string
-	Address  string
-}
 
 type DomainStat map[string]int
 
 func GetDomainStat(r io.Reader, domain string) (DomainStat, error) {
-	u, err := getUsers(r)
-	if err != nil {
-		return nil, fmt.Errorf("get users error: %s", err)
-	}
-	return countDomains(u, domain)
+	return countDomains(r, domain), nil
 }
 
-type users [100_000]User
+func countDomains(r io.Reader, firstLvlDomain string) DomainStat {
+	queueCh := make(chan string)
+	resultCh := make(chan string)
+	wg := &sync.WaitGroup{}
 
-func getUsers(r io.Reader) (result users, err error) {
-	content, err := ioutil.ReadAll(r)
-	if err != nil {
-		return
+	prefixString := "\"Email\":\""
+	prefixStringRunes := []rune(prefixString)
+
+	for i := 0; i < runtime.NumCPU(); i++ {
+		go processLine(firstLvlDomain, prefixStringRunes, wg, queueCh, resultCh)
 	}
 
-	lines := strings.Split(string(content), "\n")
-	for i, line := range lines {
-		var user User
-		if err = json.Unmarshal([]byte(line), &user); err != nil {
-			return
-		}
-		result[i] = user
-	}
-	return
-}
-
-func countDomains(u users, domain string) (DomainStat, error) {
 	result := make(DomainStat)
 
-	for _, user := range u {
-		matched, err := regexp.Match("\\."+domain, []byte(user.Email))
-		if err != nil {
-			return nil, err
+	doneCh := make(chan struct{})
+	go aggregateResults(result, resultCh, doneCh)
+
+	readFile(r, wg, queueCh)
+
+	wg.Wait()
+	close(resultCh)
+
+	<-doneCh
+
+	return result
+}
+
+func readFile(r io.Reader, wg *sync.WaitGroup, queueCh chan<- string) {
+	br := bufio.NewReader(r)
+	for {
+		line, err := br.ReadString('\n')
+		//nolint: errorlint
+		// т.к. error.Is делается медленно
+		if err != nil && err != io.EOF {
+			break
 		}
 
-		if matched {
-			num := result[strings.ToLower(strings.SplitN(user.Email, "@", 2)[1])]
-			num++
-			result[strings.ToLower(strings.SplitN(user.Email, "@", 2)[1])] = num
+		wg.Add(1)
+
+		queueCh <- line
+
+		//nolint: errorlint
+		// т.к. error.Is делается медленно
+		if err == io.EOF {
+			break
 		}
 	}
-	return result, nil
+
+	defer close(queueCh)
+}
+
+func aggregateResults(result DomainStat, resultCh <-chan string, doneCh chan<- struct{}) {
+	for {
+		domain, ok := <-resultCh
+		if !ok {
+			break
+		}
+
+		num := result[domain]
+		num++
+		result[domain] = num
+	}
+
+	defer close(doneCh)
+}
+
+// подразумевается, что входной json нормализован, валиден и не содержит лишних пробелов
+// если нам важно быстродействие, то, я думаю, что это выполнимое условие
+// (пояснение к nolint) за быстродействие частенько приходится платить читаемостью кода.
+//nolint: funlen, gocognit
+func processLine(firstLvlDomain string, prefixStringRunes []rune, wg *sync.WaitGroup, queueCh <-chan string, resultCh chan<- string) {
+	for {
+		line, ok := <-queueCh
+		if !ok {
+			break
+		}
+
+		var topDomain strings.Builder
+		var domain strings.Builder
+		inEmail := false
+		inDomain := false
+		inTopDomain := false
+		var index int
+
+		for _, r := range line {
+			if !inEmail {
+				if index == len(prefixStringRunes)-1 {
+					inEmail = true
+					continue
+				}
+
+				if r == prefixStringRunes[index] {
+					index++
+					continue
+				}
+
+				index = 0
+				continue
+			}
+
+			// конец email
+			if r == '"' {
+				if topDomain.String() == firstLvlDomain {
+					resultCh <- domain.String()
+				}
+
+				wg.Done()
+
+				break
+			}
+
+			// начало домена
+			if r == '@' {
+				inDomain = true
+				continue
+			}
+
+			if inDomain {
+				domain.WriteRune(unicode.ToLower(r))
+
+				// начало домена первого уровня
+				// не учитывается вариант с email с доменом третьего уровня, например: test@sub.domain.com
+				if r == '.' {
+					inTopDomain = true
+					continue
+				}
+
+				if inTopDomain {
+					topDomain.WriteRune(unicode.ToLower(r))
+				}
+			}
+		}
+	}
 }
