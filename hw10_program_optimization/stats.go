@@ -3,6 +3,9 @@ package hw10_program_optimization //nolint:golint,stylecheck
 import (
 	"bufio"
 	"io"
+	"runtime"
+	"strings"
+	"sync"
 	"unicode"
 )
 
@@ -12,91 +15,137 @@ func GetDomainStat(r io.Reader, domain string) (DomainStat, error) {
 	return countDomains(r, domain), nil
 }
 
-// за быстродействие частенько приходится платить читаемостью кода
-//nolint: funlen
 func countDomains(r io.Reader, firstLvlDomain string) DomainStat {
-	result := make(DomainStat)
+	queueCh := make(chan string)
+	resultCh := make(chan string)
+	wg := &sync.WaitGroup{}
+
 	prefixString := "\"Email\":\""
 	prefixStringRunes := []rune(prefixString)
 
-	// подразумевается, что входной json нормализован, валиден и не содержит лишних пробелов
-	// если нам важно быстродействие, то, я думаю, что это выполнимое условие
-	var topDomainRunes []rune
-	var domainRunes []rune
-	inEmail := false
-	inDomain := false
-	inTopDomain := false
-	var index int
+	for i := 0; i < runtime.NumCPU(); i++ {
+		go processLine(firstLvlDomain, prefixStringRunes, wg, queueCh, resultCh)
+	}
+
+	result := make(DomainStat)
+
+	doneCh := make(chan struct{})
+	go aggregateResults(result, resultCh, doneCh)
+
+	readFile(r, wg, queueCh)
+
+	wg.Wait()
+	close(resultCh)
+
+	<-doneCh
+
+	return result
+}
+
+func readFile(r io.Reader, wg *sync.WaitGroup, queueCh chan<- string) {
 	br := bufio.NewReader(r)
 	for {
-		// Закрываем глаза на то, что данные могут быть в UTF-8
-		b, err := br.ReadByte()
+		line, err := br.ReadString('\n')
+		//nolint: errorlint
+		// т.к. error.Is делается медленно
+		if err != nil && err != io.EOF {
+			break
+		}
 
-		r := rune(b)
+		wg.Add(1)
+
+		queueCh <- line
 
 		//nolint: errorlint
 		// т.к. error.Is делается медленно
 		if err == io.EOF {
 			break
 		}
+	}
 
-		if !inEmail {
-			if index == len(prefixStringRunes)-1 {
-				inEmail = true
+	defer close(queueCh)
+}
+
+func aggregateResults(result DomainStat, resultCh <-chan string, doneCh chan<- struct{}) {
+	for {
+		domain, ok := <-resultCh
+		if !ok {
+			break
+		}
+
+		num := result[domain]
+		num++
+		result[domain] = num
+	}
+
+	defer close(doneCh)
+}
+
+// подразумевается, что входной json нормализован, валиден и не содержит лишних пробелов
+// если нам важно быстродействие, то, я думаю, что это выполнимое условие
+// за быстродействие частенько приходится платить читаемостью кода
+//nolint: funlen, gocognit
+func processLine(firstLvlDomain string, prefixStringRunes []rune, wg *sync.WaitGroup, queueCh <-chan string, resultCh chan<- string) {
+	for {
+		line, ok := <-queueCh
+		if !ok {
+			break
+		}
+
+		var topDomain strings.Builder
+		var domain strings.Builder
+		inEmail := false
+		inDomain := false
+		inTopDomain := false
+		var index int
+
+		for _, r := range line {
+			if !inEmail {
+				if index == len(prefixStringRunes)-1 {
+					inEmail = true
+					continue
+				}
+
+				if r == prefixStringRunes[index] {
+					index++
+					continue
+				}
+
+				index = 0
 				continue
 			}
 
-			if r == prefixStringRunes[index] {
-				index++
+			// конец email
+			if r == '"' {
+				if topDomain.String() == firstLvlDomain {
+					resultCh <- domain.String()
+				}
+
+				wg.Done()
+
+				break
+			}
+
+			// начало домена
+			if r == '@' {
+				inDomain = true
 				continue
 			}
 
-			index = 0
-			continue
-		}
+			if inDomain {
+				domain.WriteRune(unicode.ToLower(r))
 
-		// конец email
-		if r == '"' {
-			topDomain := string(topDomainRunes)
+				// начало домена первого уровня
+				// не учитывается вариант с email с доменом третьего уровня, например: test@sub.domain.com
+				if r == '.' {
+					inTopDomain = true
+					continue
+				}
 
-			if topDomain == firstLvlDomain {
-				domain := string(domainRunes)
-				num := result[domain]
-				num++
-				result[domain] = num
-			}
-
-			topDomainRunes = nil
-			domainRunes = nil
-			inEmail = false
-			inDomain = false
-			inTopDomain = false
-			index = 0
-
-			continue
-		}
-
-		// начало домена
-		if r == '@' {
-			inDomain = true
-			continue
-		}
-
-		if inDomain {
-			domainRunes = append(domainRunes, unicode.ToLower(r))
-
-			// начало домена первого уровня
-			// не учитывается вариант с email с доменом третьего уровня, например: test@sub.domain.com
-			if r == '.' {
-				inTopDomain = true
-				continue
-			}
-
-			if inTopDomain {
-				topDomainRunes = append(topDomainRunes, unicode.ToLower(r))
+				if inTopDomain {
+					topDomain.WriteRune(unicode.ToLower(r))
+				}
 			}
 		}
 	}
-
-	return result
 }
